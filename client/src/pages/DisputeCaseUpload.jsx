@@ -9,6 +9,7 @@ import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
 import { disputeService } from '@/lib/services/disputeService';
 import { ChevronLeft, Upload, X, FileText, AlertTriangle } from 'lucide-react';
+import ImageIntegrityAnalyzer from '../image_meta_data_analyzer/image-integrity-analyzer';
 
 /**
  * Simplified dispute case upload page
@@ -29,6 +30,12 @@ export function DisputeCaseUpload() {
     evidence: []
   });
 
+  const computeIntegrity = async (file) => {
+    const analyzer = new ImageIntegrityAnalyzer();
+    const result = await analyzer.analyzeImage(file);
+    console.log(result);
+  };
+
   const handleFileSelect = (files) => {
     const validFiles = Array.from(files).filter(file => {
       // Validate file type (images and documents)
@@ -44,6 +51,7 @@ export function DisputeCaseUpload() {
         return false;
       }
 
+      computeIntegrity(file);
       return true;
     });
 
