@@ -17,7 +17,8 @@ import {
   XCircle, 
   RefreshCw,
   ArrowLeft,
-  Building
+  Building,
+  Upload
 } from 'lucide-react';
 
 /**
@@ -100,72 +101,54 @@ export function EscrowActions() {
               };
 
               setRentedProperties([property]);
-            } else {
-              throw new Error('Failed to load property metadata');
             }
           } else {
-            throw new Error('You are not involved in this rental or it is not active');
+            setRentedProperties([]);
           }
         } catch (error) {
           console.error('Failed to load specific rental:', error);
-          toast.error('Failed to load rental details');
-          navigate('/tenant');
+          setRentedProperties([]);
         }
       } else {
-        // Load all rented properties (existing logic)
-        const allNFTsResult = await web3Service.getAllNFTsWithDetails();
-        if (!allNFTsResult.success) {
-          throw new Error(allNFTsResult.error);
-        }
+        // Load all user's rented properties
+        const result = await web3Service.getUserNFTs();
+        if (result.success) {
+          const userRentals = result.nfts.filter(nft => nft.rental.isActive);
+          const processedRentals = [];
 
-        const rentedPropertiesData = [];
-
-        for (const nft of allNFTsResult.nfts) {
-          try {
-            // Get rental details
-            const rentalDetails = await web3Service.contract.getRentalDetails(nft.tokenId);
-            
-            // Check if this property is actively rented and current user is involved
-            if (rentalDetails.isActive && 
-                (rentalDetails.tenant.toLowerCase() === currentAccount.toLowerCase() || 
-                 rentalDetails.landlord.toLowerCase() === currentAccount.toLowerCase())) {
-              
-              // Get metadata
+          for (const nft of userRentals) {
+            try {
               const metadataResult = await web3Service.getMetadataFromURI(nft.tokenURI);
               if (metadataResult.success) {
                 const imageUrl = getImageUrl(metadataResult.metadata.image);
                 
-                const property = {
+                processedRentals.push({
                   tokenId: nft.tokenId,
                   title: metadataResult.metadata.name,
                   city: metadataResult.metadata.city,
                   coverImage: imageUrl,
-                  rent: parseInt(rentalDetails.rent),
-                  deposit: parseInt(rentalDetails.deposit),
-                  disputeFee: parseInt(rentalDetails.disputeFee),
-                  landlord: rentalDetails.landlord,
-                  tenant: rentalDetails.tenant,
-                  tenantHappy: rentalDetails.tenantHappy,
-                  landlordHappy: rentalDetails.landlordHappy,
-                  isDisputed: rentalDetails.isDisputed,
-                  isLandlord: rentalDetails.landlord.toLowerCase() === currentAccount.toLowerCase(),
+                  rent: parseInt(nft.rental.rent),
+                  deposit: parseInt(nft.rental.deposit),
+                  disputeFee: parseInt(nft.rental.disputeFee),
+                  landlord: nft.rental.landlord,
+                  tenant: nft.rental.tenant,
+                  tenantHappy: nft.rental.tenantHappy,
+                  landlordHappy: nft.rental.landlordHappy,
+                  isDisputed: nft.rental.isDisputed,
+                  isLandlord: nft.rental.landlord.toLowerCase() === currentAccount.toLowerCase(),
                   metadata: metadataResult.metadata
-                };
-
-                rentedPropertiesData.push(property);
+                });
               }
+            } catch (error) {
+              console.error(`Failed to process rental ${nft.tokenId}:`, error);
             }
-          } catch (error) {
-            console.error(`Failed to process NFT ${nft.tokenId}:`, error);
           }
+
+          setRentedProperties(processedRentals);
         }
-
-        setRentedProperties(rentedPropertiesData);
       }
-
     } catch (error) {
       console.error('Failed to load rented properties:', error);
-      toast.error('Failed to load rented properties');
     } finally {
       setLoading(false);
     }
@@ -181,9 +164,10 @@ export function EscrowActions() {
     try {
       setProcessingAction(tokenId);
       
+      // Determine if current user is landlord or tenant
       const property = rentedProperties.find(p => p.tokenId === tokenId);
-      const isLandlord = property.isLandlord;
-
+      const isLandlord = property?.isLandlord || false;
+      
       const result = await web3Service.confirmHappy(tokenId, isLandlord);
       
       if (result.success) {
@@ -211,10 +195,16 @@ export function EscrowActions() {
       const result = await web3Service.raiseDispute(tokenId);
       
       if (result.success) {
-        toast.success('Dispute raised!', {
-          description: 'A dispute has been initiated. The jury will review the case.'
+        toast.success('Dispute raised successfully!', {
+          description: 'Now you can upload your case with evidence.'
         });
-        await loadRentedProperties(); // Refresh the data
+        
+        // Determine user role for the dispute
+        const property = rentedProperties.find(p => p.tokenId === tokenId);
+        const role = property?.isLandlord ? 'landlord' : 'tenant';
+        
+        // Redirect to dispute case upload page
+        navigate(`/disputes/upload?propertyId=${tokenId}&role=${role}`);
       } else {
         throw new Error(result.error);
       }
@@ -226,6 +216,12 @@ export function EscrowActions() {
     } finally {
       setProcessingAction(null);
     }
+  };
+
+  const handleUploadCase = (tokenId) => {
+    const property = rentedProperties.find(p => p.tokenId === tokenId);
+    const role = property?.isLandlord ? 'landlord' : 'tenant';
+    navigate(`/disputes/upload?propertyId=${tokenId}&role=${role}`);
   };
 
   const handleWithdraw = async () => {
@@ -298,69 +294,20 @@ export function EscrowActions() {
               disabled={processingAction === 'withdraw'}
               icon={<DollarSign className="w-4 h-4" />}
             >
-              {processingAction === 'withdraw' ? 'Withdrawing...' : 'Withdraw Funds'}
+              {processingAction === 'withdraw' ? 'Processing...' : 'Withdraw Funds'}
             </NBButton>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <NBCard className="p-4">
-            <div className="flex items-center">
-              <Home className="w-8 h-8 text-nb-accent mr-3" />
-              <div>
-                <div className="text-2xl font-bold text-nb-ink">{rentedProperties.length}</div>
-                <div className="text-sm text-nb-ink/70">Active Rentals</div>
-              </div>
-            </div>
-          </NBCard>
-          
-          <NBCard className="p-4">
-            <div className="flex items-center">
-              <CheckCircle className="w-8 h-8 text-nb-warn mr-3" />
-              <div>
-                <div className="text-2xl font-bold text-nb-ink">
-                  {rentedProperties.filter(p => p.tenantHappy || p.landlordHappy).length}
-                </div>
-                <div className="text-sm text-nb-ink/70">Happy Parties</div>
-              </div>
-            </div>
-          </NBCard>
-          
-          <NBCard className="p-4">
-            <div className="flex items-center">
-              <AlertTriangle className="w-8 h-8 text-nb-error mr-3" />
-              <div>
-                <div className="text-2xl font-bold text-nb-ink">
-                  {rentedProperties.filter(p => p.isDisputed).length}
-                </div>
-                <div className="text-sm text-nb-ink/70">Disputes</div>
-              </div>
-            </div>
-          </NBCard>
-          
-          <NBCard className="p-4">
-            <div className="flex items-center">
-              <User className="w-8 h-8 text-nb-accent mr-3" />
-              <div>
-                <div className="text-2xl font-bold text-nb-ink">
-                  {rentedProperties.filter(p => p.isLandlord).length}
-                </div>
-                <div className="text-sm text-nb-ink/70">As Landlord</div>
-              </div>
-            </div>
-          </NBCard>
-        </div>
-
-        {/* Rented Properties */}
+        {/* Content */}
         {rentedProperties.length === 0 ? (
           <NBCard className="text-center py-16">
             <Building className="w-16 h-16 text-nb-ink/30 mx-auto mb-4" />
             <h3 className="font-display font-bold text-xl text-nb-ink mb-2">
               No active rentals
             </h3>
-            <p className="font-body text-nb-ink/70 mb-6">
-              You don't have any active rentals yet. Rent a property to see it here.
+            <p className="text-nb-ink/70 mb-6">
+              You don't have any active rental agreements at the moment.
             </p>
             <NBButton onClick={() => navigate('/tenant')}>
               Explore Properties
@@ -385,22 +332,22 @@ export function EscrowActions() {
 
                   {/* Property Details */}
                   <div className="lg:w-2/3 space-y-4">
-                    <div>
-                      <h3 className="font-display font-bold text-xl text-nb-ink mb-2">
-                        {property.title}
-                      </h3>
-                      <p className="text-nb-ink/70 mb-2">{property.city}</p>
-                      <div className="flex items-center space-x-2">
-                        <span className={`px-2 py-1 text-xs rounded border border-nb-ink ${
-                          property.isLandlord ? 'bg-nb-accent text-nb-ink' : 'bg-nb-warn text-nb-ink'
-                        }`}>
-                          {property.isLandlord ? 'Landlord' : 'Tenant'}
-                        </span>
-                        {property.isDisputed && (
-                          <span className="px-2 py-1 bg-nb-error text-nb-ink text-xs rounded border border-nb-ink">
-                            Disputed
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="font-display font-bold text-xl text-nb-ink mb-1">
+                          {property.title}
+                        </h3>
+                        <p className="text-nb-ink/70 mb-2">{property.city}</p>
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2 py-1 bg-nb-accent text-nb-ink text-xs rounded border border-nb-ink">
+                            {property.isLandlord ? 'Landlord' : 'Tenant'}
                           </span>
-                        )}
+                          {property.isDisputed && (
+                            <span className="px-2 py-1 bg-nb-error text-nb-ink text-xs rounded border border-nb-ink">
+                              Disputed
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -486,10 +433,20 @@ export function EscrowActions() {
                       )}
                       
                       {property.isDisputed && (
-                        <div className="w-full p-3 bg-nb-error/20 border border-nb-error rounded-nb">
-                          <p className="text-sm text-nb-ink">
-                            ⚠️ This property is under dispute. The jury will review and resolve the case.
-                          </p>
+                        <div className="w-full space-y-3">
+                          <div className="p-3 bg-nb-error/20 border border-nb-error rounded-nb">
+                            <p className="text-sm text-nb-ink">
+                              ⚠️ This property is under dispute. Upload your case with evidence for the jury to review.
+                            </p>
+                          </div>
+                          <NBButton
+                            onClick={() => handleUploadCase(property.tokenId)}
+                            variant="primary"
+                            icon={<Upload className="w-4 h-4" />}
+                            className="bg-nb-error hover:bg-nb-error/80"
+                          >
+                            Upload Your Case
+                          </NBButton>
                         </div>
                       )}
                     </div>

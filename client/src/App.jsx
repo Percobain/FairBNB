@@ -7,6 +7,7 @@ import { AddListing } from '@/pages/AddListing';
 import { TenantExplore } from '@/pages/TenantExplore';
 import { ListingDetails } from '@/pages/ListingDetails';
 import { EscrowActions } from '@/pages/EscrowActions';
+import { DisputeCaseUpload } from '@/pages/DisputeCaseUpload';
 import { NewDispute } from '@/pages/NewDispute';
 import { LandlordDispute } from '@/pages/LandlordDispute';
 import { JuryDashboard } from '@/pages/JuryDashboard';
@@ -25,6 +26,7 @@ function App() {
           <Route path="/tenant/listing/:id" element={<ListingDetails />} />
           <Route path="/tenant/escrow" element={<EscrowActions />} />
           <Route path="/tenant/escrow/:rentalId" element={<EscrowActions />} />
+          <Route path="/disputes/upload" element={<DisputeCaseUpload />} />
           <Route path="/disputes/new" element={<NewDispute />} />
           <Route path="/jury" element={<JuryDashboard />} />
           <Route path="/jury/case/:id" element={<JuryCase />} />
