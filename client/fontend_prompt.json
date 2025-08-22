@@ -1,0 +1,453 @@
+{
+    "meta": {
+      "spec_version": "1.0.0",
+      "title": "Decentralized Rental Escrow — Frontend Only",
+      "author": "Cursor Prompt",
+      "description": "Build a production‑quality, frontend‑only dApp UI for a rental escrow with integrated dispute DAO. Use TailwindCSS in a Neo‑Brutalist style. No blockchain logic or wallet integration yet — wire up clean mock services and deterministic demo data so the app runs end‑to‑end with realistic UX.",
+      "framework": {
+        "name": "React.js",
+        "app_router": true,
+        "typescript": true,
+        "react_server_components": true
+      }
+    },
+    "tech_stack": {
+      "styling": "TailwindCSS (Neo‑Brutalism)",
+      "ui_kit": ["shadcn/ui (for primitives)", "lucide-react (icons)"],
+      "state": "Zustand for global stores + URL search params for filters",
+      "forms": "react-hook-form + zod",
+      "routing": "React.js app router",
+      "mock_api": "Local in-memory services + optional MSW handlers (no network calls required)",
+      "notifications": "sonner",
+      "images": "react/image with local placeholder assets"
+    },
+    "design_language": {
+      "theme_name": "Neo‑Brutalism",
+      "tailwind_overrides": {
+        "theme": {
+          "extend": {
+            "colors": {
+              "nb-bg": "#F7F5F2",
+              "nb-ink": "#111111",
+              "nb-accent": "#6EE7B7",
+              "nb-accent-2": "#60A5FA",
+              "nb-warn": "#F59E0B",
+              "nb-error": "#EF4444",
+              "nb-ok": "#10B981",
+              "nb-card": "#FFFFFF"
+            },
+            "boxShadow": {
+              "nb": "8px 8px 0 0 rgba(0,0,0,0.9)",
+              "nb-sm": "4px 4px 0 0 rgba(0,0,0,0.9)",
+              "nb-inset": "inset 0 0 0 3px #111"
+            },
+            "borderRadius": {
+              "nb": "1.25rem"
+            },
+            "fontFamily": {
+              "display": ["Space Grotesk", "system-ui", "sans-serif"],
+              "body": ["Inter", "system-ui", "sans-serif"]
+            }
+          }
+        }
+      },
+      "neo_brutalism_rules": [
+        "Thick 2-3px borders (#111) on cards and interactive elements.",
+        "High-contrast solid backgrounds, minimal gradients.",
+        "Offset drop shadows (shadow-nb) to create sticker effect.",
+        "Large punchy headings (font-display), compact body (font-body).",
+        "Rounded corners (rounded-nb) and generous padding.",
+        "Micro-interactions: hover:-translate-y-0.5, active:translate-y-0 focus-visible:ring-4."
+      ]
+    },
+    "app_structure": {
+      "root_layout": {
+        "header": ["Logo", "Global Nav: Landlord, Tenant, Jury", "Connect Wallet (disabled placeholder)", "Theme toggle (optional)"],
+        "footer": ["Copyright", "Dummy Links", "Version"]
+      },
+      "routes": [
+        {
+          "path": "/",
+          "title": "Landing",
+          "purpose": "Introduce the platform and route users to Landlord, Tenant, or Jury portals.",
+          "sections": [
+            "Hero with bold tagline and CTA buttons",
+            "Three Cards (Landlord, Tenant, Jury) with descriptions",
+            "How it works (3 steps): Mint NFT, Escrow, DAO Dispute",
+            "Feature highlights grid",
+            "FAQ accordion"
+          ]
+        },
+        {
+          "path": "/landlord",
+          "title": "Landlord Dashboard",
+          "purpose": "Show all listings owned by the landlord and allow creation of new listings.",
+          "elements": [
+            "Header with 'Add Listing' primary button",
+            "Stats strip (Total Listings, Active Rentals, Pending Disputes)",
+            "Listings table + grid toggle with cards (title, rent, deposit, status, actions)",
+            "Action menu per listing: View, Edit (frontend only), Archive"
+          ]
+        },
+        {
+          "path": "/landlord/new",
+          "title": "Add Listing",
+          "purpose": "Form flow to add a new property listing (frontend only).",
+          "form": {
+            "steps": [
+              {
+                "name": "Basics",
+                "fields": ["title", "propertyType", "address", "city", "state", "country", "pincode", "description"]
+              },
+              {
+                "name": "Pricing",
+                "fields": ["rentPerMonth", "securityDeposit", "disputeFee", "acceptedTokens (display BNB only)"]
+              },
+              {
+                "name": "Media",
+                "fields": ["photos[] (multi upload stub)", "coverImage index"]
+              },
+              {
+                "name": "Availability",
+                "fields": ["availableFrom", "minDurationMonths", "maxDurationMonths"]
+              },
+              {
+                "name": "Review & Create",
+                "summary": true
+              }
+            ],
+            "validation": "Zod schema for all fields",
+            "submit_behavior": "Create the listing via mock service, route back to /landlord with toast"
+          }
+        },
+        {
+          "path": "/tenant",
+          "title": "Explore Listings",
+          "purpose": "Display all NFT properties with Airbnb-like filters and sorting.",
+          "elements": [
+            "Filter bar (city, price range, property type, duration, availability date)",
+            "Search input + chip filters",
+            "Results grid of ListingCards with quick info and 'View' CTA",
+            "Empty state when no results"
+          ]
+        },
+        {
+          "path": "/tenant/listing/[id]",
+          "title": "Listing Details",
+          "purpose": "Show full details, gallery, landlord info, rental terms, and booking CTA.",
+          "elements": [
+            "Image gallery carousel (static images)",
+            "Title, address, tags, landlord badge",
+            "Tabs: Overview, Amenities, Terms, Reviews (mock)",
+            "Pricing widget with rent, deposit, dispute fee",
+            "Book button (opens modal to confirm & 'lock funds' — frontend only)"
+          ]
+        },
+        {
+          "path": "/tenant/escrow/[rentalId]",
+          "title": "Escrow Actions",
+          "purpose": "Allow tenant to either confirm satisfaction or raise a dispute.",
+          "elements": [
+            "Rental summary panel",
+            "Two primary actions: 'Everything is fine' and 'Raise Dispute'",
+            "Confirm flow shows success toast and sets rental.status = 'completed'",
+            "Dispute flow routes to /disputes/new with prefilled context"
+          ]
+        },
+        {
+          "path": "/disputes/new",
+          "title": "Raise a Dispute",
+          "purpose": "Form for tenant or landlord to submit their case details.",
+          "form": {
+            "fields": [
+              "rentalId (select)",
+              "role (tenant|landlord)",
+              "title",
+              "claimSummary",
+              "detailedNarrative (rich text)",
+              "evidence[] (file upload stubs)",
+              "desiredOutcome (refund, partial, landlordWins, other)"
+            ],
+            "on_submit": "Create dispute via mock service, route to /jury with toast"
+          }
+        },
+        {
+          "path": "/landlord/disputes/[id]",
+          "title": "Dispute — Landlord View",
+          "purpose": "Show case details and allow landlord to submit their statement/evidence.",
+          "elements": [
+            "Case header with status chip (Raised, Under Review, Voting, Resolved)",
+            "Two column view: Tenant POV vs Landlord POV",
+            "Submit statement form (if not submitted)",
+            "Timeline: created → statements → jury assigned → voting → resolution"
+          ]
+        },
+        {
+          "path": "/jury",
+          "title": "Jury Dashboard",
+          "purpose": "List all active disputes and allow jurors to open a case and vote.",
+          "elements": [
+            "Filters: status, city, property type",
+            "Cases table/list with: disputeId, rental, parties (masked), status, endsIn",
+            "Clicking a case routes to /jury/case/[id]"
+          ]
+        },
+        {
+          "path": "/jury/case/[id]",
+          "title": "Case Detail & Vote",
+          "purpose": "Present both sides and allow a single decisive vote.",
+          "elements": [
+            "Header with countdown (mock) and status chip",
+            "Panels: Tenant Statement + Evidence, Landlord Statement + Evidence",
+            "Decision buttons: 'Vote Tenant' | 'Vote Landlord' | 'Abstain'",
+            "After vote: show thank-you, disable buttons, and show distribution preview (mock)"
+          ]
+        }
+      ]
+    },
+    "components": [
+      { "name": "NBCard", "purpose": "Neo‑Brutalist card wrapper", "props": ["as", "className"], "styles": "bg-nb-card border-2 border-nb-ink shadow-nb rounded-nb p-5" },
+      { "name": "NBButton", "purpose": "Primary/secondary button", "props": ["variant", "icon", "onClick", "disabled"], "variants": ["primary (nb-ink on nb-accent)", "secondary (nb-ink on nb-accent-2)", "ghost"], "styles": "border-2 border-nb-ink shadow-nb hover:-translate-y-0.5 active:translate-y-0 transition" },
+      { "name": "StatPill", "purpose": "Dashboard mini stats", "props": ["label", "value", "icon" ] },
+      { "name": "ListingCard", "purpose": "Property preview", "props": ["id", "title", "city", "rentPerMonth", "deposit", "coverImage", "badges[]", "onView" ] },
+      { "name": "FilterBar", "purpose": "Tenant filters", "props": ["query", "onChange"], "details": "syncs with URLSearchParams" },
+      { "name": "Gallery", "purpose": "Carousel (static)", "props": ["images[]", "coverIndex"] },
+      { "name": "PricingWidget", "purpose": "Shows pricing and booking CTA", "props": ["rentPerMonth", "deposit", "disputeFee", "onBook"] },
+      { "name": "DisputeForm", "purpose": "Create/submit dispute", "props": ["rentalId", "role", "onSubmit"] },
+      { "name": "CasePanels", "purpose": "Side‑by‑side statements", "props": ["tenant", "landlord"] },
+      { "name": "VoteBox", "purpose": "Vote controls", "props": ["onVote", "disabled", "deadline"] }
+    ],
+    "types": {
+      "Property": {
+        "id": "string",
+        "ownerId": "string",
+        "title": "string",
+        "propertyType": "\"Apartment\"|\"Studio\"|\"PG\"|\"CoLiving\"|\"House\"",
+        "address": "string",
+        "city": "string",
+        "state": "string",
+        "country": "string",
+        "pincode": "string",
+        "description": "string",
+        "amenities": "string[]",
+        "rentPerMonth": "number",
+        "securityDeposit": "number",
+        "disputeFee": "number",
+        "acceptedTokens": "string[] (display 'BNB' only)",
+        "availableFrom": "string (ISO)",
+        "minDurationMonths": "number",
+        "maxDurationMonths": "number",
+        "photos": "string[]",
+        "coverImage": "number"
+      },
+      "ListingSummary": {
+        "id": "string",
+        "title": "string",
+        "city": "string",
+        "rentPerMonth": "number",
+        "securityDeposit": "number",
+        "coverImage": "string"
+      },
+      "Rental": {
+        "id": "string",
+        "propertyId": "string",
+        "landlordId": "string",
+        "tenantId": "string",
+        "startDate": "string (ISO)",
+        "durationMonths": "number",
+        "status": "\"initiated\"|\"active\"|\"completed\"|\"disputed\"|\"resolved\""
+      },
+      "Dispute": {
+        "id": "string",
+        "rentalId": "string",
+        "raisedBy": "\"tenant\"|\"landlord\"",
+        "title": "string",
+        "claimSummary": "string",
+        "tenantStatement": "string",
+        "landlordStatement": "string",
+        "tenantEvidence": "string[]",
+        "landlordEvidence": "string[]",
+        "status": "\"raised\"|\"under_review\"|\"voting\"|\"resolved\"",
+        "deadline": "string (ISO)",
+        "result": "null | { winner: \"tenant\"|\"landlord\"|\"none\", distributedFees: number }"
+      },
+      "User": {
+        "id": "string",
+        "role": "\"landlord\"|\"tenant\"|\"jury\"",
+        "name": "string",
+        "avatarUrl": "string"
+      }
+    },
+    "mock_services": {
+      "seed_strategy": "Deterministic faker seeded with 'fairbnb' to generate 12 properties across 3 cities.",
+      "modules": [
+        {
+          "name": "propertiesService",
+          "functions": [
+            "listAll(query): ListingSummary[] (filter + paginate via URL params)",
+            "getById(id): Property",
+            "create(input): Property (landlord only)",
+            "forOwner(ownerId): ListingSummary[]"
+          ]
+        },
+        {
+          "name": "rentalsService",
+          "functions": [
+            "createBooking({ propertyId, tenantId, durationMonths }): Rental",
+            "getById(id): Rental",
+            "markCompleted(id): Rental",
+            "flagDispute(id): Rental"
+          ]
+        },
+        {
+          "name": "disputesService",
+          "functions": [
+            "create(input): Dispute",
+            "listActive(): Dispute[]",
+            "getById(id): Dispute",
+            "submitStatement(id, role, text, evidence[]): Dispute",
+            "openForVoting(id): Dispute",
+            "castVote(id, choice): Dispute (updates tallies, sets result on mock deadline)"
+          ]
+        }
+      ]
+    },
+    "ux_flows": {
+      "booking": [
+        "Tenant opens listing → clicks Book",
+        "Modal confirms rent+deposit+dispute fee (display BNB only text)",
+        "On confirm: create Rental via mock, toast 'Funds locked (demo)', route to /tenant/escrow/[rentalId]"
+      ],
+      "escrow": [
+        "On Escrow page: show two options",
+        "Happy path → markCompleted → toast 'Released (demo)' → back to listing",
+        "Dispute path → route to /disputes/new with rental prefilled"
+      ],
+      "jury_vote": [
+        "Jury opens case → reads both panels → picks one button",
+        "Vote stored via mock, buttons disabled, show distribution preview card"
+      ]
+    },
+    "accessibility": {
+      "standards": "WCAG 2.1 AA",
+      "requirements": [
+        "All interactive elements reachable via keyboard",
+        "Visible focus outlines",
+        "aria-live region for toasts",
+        "Semantic landmarks: header, main, nav, footer",
+        "Alt text for all images"
+      ]
+    },
+    "testing_ids": {
+      "selectors": [
+        "data-testid=cta-landlord",
+        "data-testid=cta-tenant",
+        "data-testid=cta-jury",
+        "data-testid=add-listing",
+        "data-testid=filter-city",
+        "data-testid=book-listing",
+        "data-testid=escrow-happy",
+        "data-testid=escrow-dispute",
+        "data-testid=dispute-submit",
+        "data-testid=vote-tenant",
+        "data-testid=vote-landlord"
+      ]
+    },
+    "file_structure": {
+      "root": [
+        "app/(marketing)/page.tsx (Landing)",
+        "app/landlord/page.tsx",
+        "app/landlord/new/page.tsx",
+        "app/tenant/page.tsx",
+        "app/tenant/listing/[id]/page.tsx",
+        "app/tenant/escrow/[rentalId]/page.tsx",
+        "app/disputes/new/page.tsx",
+        "app/landlord/disputes/[id]/page.tsx",
+        "app/jury/page.tsx",
+        "app/jury/case/[id]/page.tsx",
+        "components/*.tsx (NBCard, NBButton, ListingCard, FilterBar, …)",
+        "lib/services/*.ts (mock services)",
+        "lib/stores/*.ts (zustand)",
+        "lib/types.ts",
+        "public/mock-images/*"
+      ]
+    },
+    "copy": {
+      "brand": "FairBNB (demo)",
+      "tagline": "Trustless rentals. Transparent outcomes.",
+      "hero_ctas": ["I'm a Landlord", "I'm a Tenant", "I'm a Juror"],
+      "highlights": [
+        "NFT‑backed agreements",
+        "Escrowed funds (demo)",
+        "DAO‑style disputes (demo)",
+        "No intermediaries"
+      ]
+    },
+    "acceptance_criteria": [
+      "All pages compile with no TypeScript errors.",
+      "Landing shows three bold cards with CTAs to /landlord, /tenant, /jury.",
+      "Landlord dashboard lists seeded properties and supports creating a new listing (mock).",
+      "Tenant explore page filters by city and price and syncs filters to the URL.",
+      "Listing Details shows gallery, tabs, and a working Book modal (mock).",
+      "Escrow page shows two actions and updates mock rental state accordingly.",
+      "Dispute creation form validates fields and submits to mock service, then routes to Jury.",
+      "Jury dashboard lists active disputes; case page allows exactly one vote and locks UI after voting.",
+      "All major components exhibit Neo‑Brutalist visuals: thick borders, offset shadows, bold colors.",
+      "No real wallet or blockchain calls are performed. All data flows through mock services."
+    ],
+    "commands_for_cursor": [
+      "Create React.js (app router) TypeScript project.",
+      "Install dependencies: tailwindcss, @tailwindcss/typography, class-variance-authority, clsx, lucide-react, zustand, zod, react-hook-form, sonner, framer-motion, @radix-ui/react-* (via shadcn/ui).",
+      "Configure Tailwind with provided theme extensions.",
+      "Generate components and pages per file_structure.",
+      "Implement forms with react-hook-form + zod; show inline error states.",
+      "Implement mock services and deterministic seed data; store to Zustand for cross-page state.",
+      "Wire toasts (sonner) for all major actions.",
+      "Ensure responsive layouts (mobile-first, md:grid, lg:grid-cols-12) with clean spacing.",
+      "Add data-testid attributes as specified.",
+      "Polish animations with Framer Motion on cards/buttons (subtle)."
+    ],
+    "seed_data_examples": {
+      "properties": [
+        {
+          "id": "prop_001",
+          "ownerId": "landlord_01",
+          "title": "Sunny Studio near Metro",
+          "propertyType": "Studio",
+          "address": "221B Baker Street",
+          "city": "Mumbai",
+          "state": "MH",
+          "country": "IN",
+          "pincode": "400001",
+          "description": "Compact studio with great light and fast internet.",
+          "amenities": ["Wi‑Fi", "AC", "Washer"],
+          "rentPerMonth": 22000,
+          "securityDeposit": 44000,
+          "disputeFee": 1000,
+          "acceptedTokens": ["BNB"],
+          "availableFrom": "2025-09-01",
+          "minDurationMonths": 3,
+          "maxDurationMonths": 12,
+          "photos": ["/mock-images/studio-1.jpg", "/mock-images/studio-2.jpg"],
+          "coverImage": 0
+        }
+      ],
+      "disputes": [
+        {
+          "id": "disp_100",
+          "rentalId": "rent_777",
+          "raisedBy": "tenant",
+          "title": "AC not working",
+          "claimSummary": "AC failed during first week of stay.",
+          "tenantStatement": "The AC stopped cooling; landlord did not repair in time.",
+          "landlordStatement": "Technician scheduled; tenant denied access twice.",
+          "tenantEvidence": ["/mock-images/evidence-temp.jpg"],
+          "landlordEvidence": ["/mock-images/evidence-ticket.jpg"],
+          "status": "voting",
+          "deadline": "2025-10-01T12:00:00.000Z",
+          "result": null
+        }
+      ]
+    }
+  }
+  
