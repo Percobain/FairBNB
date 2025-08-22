@@ -1,7 +1,7 @@
 import '@rainbow-me/rainbowkit/styles.css';
 import { useAccount } from 'wagmi';
 import './App.css';
-import { Demo } from './components/demo';
+import { GreenfieldExample } from './components/GreenfieldExample';
 import { Wallet } from './components/wallet';
 
 function App() {
@@ -10,7 +10,7 @@ function App() {
   return (
     <>
       <Wallet />
-      {isConnected && <Demo /> }
+      {isConnected && <GreenfieldExample /> }
     </>
   )
 }
