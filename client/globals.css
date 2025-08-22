@@ -78,3 +78,23 @@ h1, h2, h3, h4, h5, h6 {
   outline: none;
   box-shadow: 0 0 0 4px #6EE7B7;
 }
+
+/* Neo-Brutalism button bounce animations */
+@keyframes nb-bounce {
+  0% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-8px) scale(1.02); }
+  100% { transform: translateY(0px) scale(1); }
+}
+
+@keyframes nb-press {
+  0% { transform: translateY(0px) scale(1); }
+  100% { transform: translateY(6px) scale(0.98); }
+}
+
+.nb-bounce-hover:hover {
+  animation: nb-bounce 0.5s ease-out;
+}
+
+.nb-bounce-active:active {
+  animation: nb-press 0.1s ease-in-out;
+}

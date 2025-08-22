@@ -135,7 +135,6 @@ export function Layout({ children }) {
               <span className="font-display font-bold text-xl text-nb-ink">
                 FairBNB
               </span>
-              <span className="text-sm text-nb-ink/60 font-body">(demo)</span>
             </Link>
 
             {/* Desktop Navigation */}
