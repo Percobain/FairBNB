@@ -9,7 +9,8 @@ import { NBButton } from '@/components/NBButton';
 import { StatPill } from '@/components/StatPill';
 import { ListingCard } from '@/components/ListingCard';
 import { useAppStore } from '@/lib/stores/useAppStore';
-import { forOwner } from '@/lib/services/propertiesService';
+import { web3Service } from '@/lib/services/web3Service';
+import { pinataService } from '@/lib/services/pinataService';
 import { getStatsForLandlord } from '@/lib/services/rentalsService';
 import { Plus, Building, DollarSign, AlertTriangle, Grid, List } from 'lucide-react';
 
@@ -26,13 +27,74 @@ export function LandlordDashboard() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load landlord's properties
-        const ownedProperties = forOwner(currentUser.id);
-        setProperties(ownedProperties);
+        // Initialize Web3 if not already connected
+        if (!web3Service.isWeb3Connected()) {
+          const initResult = await web3Service.initialize();
+          if (!initResult.success) {
+            console.error('Failed to initialize Web3:', initResult.error);
+            setLoading(false);
+            return;
+          }
+        }
 
-        // Load rental stats
-        const rentalStats = getStatsForLandlord(currentUser.id);
-        setStats(rentalStats);
+        // Load NFTs from contract
+        const nftResult = await web3Service.getUserNFTs();
+        
+        if (nftResult.success && nftResult.nfts.length > 0) {
+          // Convert NFT data to property format
+          const nftProperties = nftResult.nfts.map((nft, index) => {
+            const metadata = nft.metadata;
+            const attributes = metadata.attributes || [];
+            
+            // Extract attributes
+            const getAttr = (trait) => {
+              const attr = attributes.find(a => a.trait_type === trait);
+              return attr ? attr.value : '';
+            };
+            
+            // Get cover image URL
+            let coverImage = metadata.image || '/mock-images/property-1.jpg';
+            if (coverImage.startsWith('ipfs://')) {
+              coverImage = pinataService.getGatewayUrl(coverImage);
+            }
+            
+            // Get all media URLs
+            const photos = (metadata.media || []).map(url => 
+              url.startsWith('ipfs://') ? pinataService.getGatewayUrl(url) : url
+            );
+            
+            return {
+              id: `nft-${nft.tokenId}`,
+              tokenId: nft.tokenId,
+              title: metadata.name.replace('FairBNB Rental - ', ''),
+              description: metadata.description,
+              city: getAttr('city'),
+              address: getAttr('address'),
+              rentPerMonth: parseFloat(getAttr('rent_bnb')) * 500000, // Convert BNB to INR
+              securityDeposit: parseFloat(getAttr('deposit_bnb')) * 500000,
+              disputeFee: parseFloat(getAttr('dispute_fee_bnb')) * 500000,
+              bedrooms: parseInt(getAttr('bedrooms')) || 2,
+              bathrooms: parseInt(getAttr('bathrooms')) || 1,
+              areaSqft: parseInt(getAttr('area_sqft')) || 1000,
+              coverImage: coverImage,
+              photos: photos.length > 0 ? photos : [coverImage],
+              status: 'Available',
+              amenities: metadata.amenities || [],
+              houseRules: metadata.house_rules || '',
+              isNFT: true
+            };
+          });
+          
+          setProperties(nftProperties);
+          setStats({
+            total: nftProperties.length,
+            active: 0,
+            completed: 0,
+            disputed: 0
+          });
+        } else {
+          setProperties([]);
+        }
       } catch (error) {
         console.error('Failed to load landlord data:', error);
       } finally {
@@ -41,7 +103,7 @@ export function LandlordDashboard() {
     };
 
     loadData();
-  }, [currentUser.id]);
+  }, []);
 
   const handleViewListing = (id) => {
     // Navigate to listing details (tenant view)
@@ -51,7 +113,7 @@ export function LandlordDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-nb-bg flex items-center justify-center">
-        <div className="text-nb-ink font-body">Loading...</div>
+        <div className="text-nb-ink font-body">Loading NFT properties from BSC Testnet...</div>
       </div>
     );
   }
@@ -66,7 +128,7 @@ export function LandlordDashboard() {
               Landlord Dashboard
             </h1>
             <p className="font-body text-nb-ink/70">
-              Manage your properties and track rental performance
+              Manage your property NFTs on BSC Testnet
             </p>
           </div>
           <Link to="/landlord/new">
@@ -83,7 +145,7 @@ export function LandlordDashboard() {
         {/* Stats Strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatPill
-            label="Total Listings"
+            label="Total NFTs"
             value={properties.length}
             icon={<Building className="w-6 h-6" />}
           />
@@ -108,7 +170,7 @@ export function LandlordDashboard() {
         <NBCard className="mb-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
             <h2 className="font-display font-bold text-xl text-nb-ink mb-4 sm:mb-0">
-              Your Listings ({properties.length})
+              Your Property NFTs ({properties.length})
             </h2>
             <div className="flex items-center space-x-2">
               <NBButton
@@ -134,17 +196,17 @@ export function LandlordDashboard() {
             <div className="text-center py-12">
               <Building className="w-16 h-16 text-nb-ink/30 mx-auto mb-4" />
               <h3 className="font-display font-bold text-lg text-nb-ink mb-2">
-                No listings yet
+                No NFT listings yet
               </h3>
               <p className="font-body text-nb-ink/70 mb-6">
-                Create your first property listing to start earning rental income
+                Create your first property NFT to start earning rental income
               </p>
               <Link to="/landlord/new">
                 <NBButton
                   icon={<Plus className="w-4 h-4" />}
                   data-testid="add-first-listing"
                 >
-                  Add Your First Listing
+                  Mint Your First Property NFT
                 </NBButton>
               </Link>
             </div>
@@ -163,7 +225,7 @@ export function LandlordDashboard() {
                     rentPerMonth={property.rentPerMonth}
                     deposit={property.securityDeposit}
                     coverImage={property.coverImage}
-                    badges={[property.status]}
+                    badges={[property.status, `NFT #${property.tokenId}`]}
                     onView={handleViewListing}
                   />
                 ) : (
@@ -182,7 +244,7 @@ export function LandlordDashboard() {
                           {property.title}
                         </h3>
                         <p className="font-body text-nb-ink/70">
-                          {property.city} • ₹{property.rentPerMonth.toLocaleString()}/month
+                          {property.city} • ₹{property.rentPerMonth.toLocaleString()}/month • NFT #{property.tokenId}
                         </p>
                       </div>
                     </div>
@@ -214,7 +276,7 @@ export function LandlordDashboard() {
               <Link to="/landlord/new">
                 <NBButton variant="ghost" className="w-full justify-start">
                   <Plus className="w-4 h-4 mr-2" />
-                  Add New Listing
+                  Mint New Property NFT
                 </NBButton>
               </Link>
               <NBButton variant="ghost" className="w-full justify-start" disabled>
@@ -234,16 +296,12 @@ export function LandlordDashboard() {
             </h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between items-center">
-                <span className="text-nb-ink/70">New listing created</span>
-                <span className="text-nb-ink/50">2 hours ago</span>
+                <span className="text-nb-ink/70">Connected to BSC Testnet</span>
+                <span className="text-nb-ink/50">Active</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-nb-ink/70">Rental inquiry received</span>
-                <span className="text-nb-ink/50">1 day ago</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-nb-ink/70">Payment received</span>
-                <span className="text-nb-ink/50">3 days ago</span>
+                <span className="text-nb-ink/70">NFTs minted</span>
+                <span className="text-nb-ink/50">{properties.length}</span>
               </div>
             </div>
           </NBCard>

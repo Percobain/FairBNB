@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
 import { create } from '@/lib/services/propertiesService';
+import { web3Service } from '@/lib/services/web3Service';
+import { pinataService } from '@/lib/services/pinataService';
 import { ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 
 const listingSchema = z.object({
@@ -27,7 +29,10 @@ const listingSchema = z.object({
   disputeFee: z.number().min(1, 'Dispute fee must be greater than 0'),
   availableFrom: z.string().min(1, 'Available from date is required'),
   minDurationMonths: z.number().min(1, 'Minimum duration is required'),
-  maxDurationMonths: z.number().min(1, 'Maximum duration is required')
+  maxDurationMonths: z.number().min(1, 'Maximum duration is required'),
+  bedrooms: z.number().min(0, 'Bedrooms must be 0 or more').optional(),
+  bathrooms: z.number().min(0, 'Bathrooms must be 0 or more').optional(),
+  areaSqft: z.number().min(1, 'Area must be greater than 0').optional()
 });
 
 /**
@@ -36,7 +41,9 @@ const listingSchema = z.object({
 export function AddListing() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
-  const [photos, setPhotos] = useState([]);
+  const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isMinting, setIsMinting] = useState(false); // Add minting state
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(listingSchema),
@@ -45,7 +52,10 @@ export function AddListing() {
       country: 'IN',
       minDurationMonths: 3,
       maxDurationMonths: 12,
-      disputeFee: 1000
+      disputeFee: 1000,
+      bedrooms: 2,
+      bathrooms: 1,
+      areaSqft: 1000
     }
   });
 
@@ -65,23 +75,115 @@ export function AddListing() {
     setValue('securityDeposit', Number(value) * 2);
   };
 
-  const onSubmit = (data) => {
+  const handlePhotoUpload = async (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
     try {
-      const newListing = create({
-        ...data,
-        photos: photos.length > 0 ? photos : ['/mock-images/property-1.jpg'],
-        coverImage: 0,
-        amenities: ['Wi-Fi', 'AC', 'Kitchen'] // Mock amenities
+      const uploadPromises = Array.from(files).map(async (file) => {
+        const result = await pinataService.uploadFile(file, {
+          name: file.name,
+          metadata: {
+            type: 'property-image'
+          }
+        });
+        
+        if (result.success) {
+          return result.url; // Return IPFS URL
+        }
+        throw new Error(result.error);
       });
 
-      toast.success('Listing created successfully!', {
-        description: 'Your property is now live on FairBNB'
-      });
+      const ipfsUrls = await Promise.all(uploadPromises);
+      setUploadedPhotos(ipfsUrls);
+      
+      toast.success(`${ipfsUrls.length} photos uploaded to IPFS successfully!`);
+    } catch (error) {
+      console.error('Failed to upload photos:', error);
+      toast.error('Failed to upload photos. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
-      navigate('/landlord');
+  const onSubmit = async (data) => {
+    // Prevent double submission
+    if (isMinting) {
+      console.log('Already minting, preventing double submission');
+      return;
+    }
+
+    setIsMinting(true);
+    
+    try {
+      // Convert rent to BNB (assuming 1 BNB = 500,000 INR for demo)
+      const rentInBNB = (data.rentPerMonth / 500000).toFixed(6);
+      const depositInBNB = (data.securityDeposit / 500000).toFixed(6);
+      const disputeFeeInBNB = (data.disputeFee / 500000).toFixed(6);
+
+      // Generate a unique property ID
+      const propertyId = Date.now().toString();
+
+      // Prepare NFT metadata matching the contract format
+      const metadata = {
+        name: `FairBNB Rental - ${data.title}`,
+        description: data.description,
+        image: uploadedPhotos[0] || '', // Cover image
+        external_url: `http://localhost:5173/property/${propertyId}`,
+        attributes: [
+          { trait_type: 'city', value: data.city },
+          { trait_type: 'address', value: data.address },
+          { trait_type: 'rent_bnb', value: rentInBNB },
+          { trait_type: 'deposit_bnb', value: depositInBNB },
+          { trait_type: 'dispute_fee_bnb', value: disputeFeeInBNB },
+          { trait_type: 'duration_months', value: `${data.minDurationMonths}-${data.maxDurationMonths}` },
+          { trait_type: 'bedrooms', value: data.bedrooms?.toString() || '2' },
+          { trait_type: 'bathrooms', value: data.bathrooms?.toString() || '1' },
+          { trait_type: 'area_sqft', value: data.areaSqft?.toString() || '1000' },
+          { trait_type: 'furnished', value: 'true' },
+          { trait_type: 'created_at', value: Date.now().toString() },
+          { trait_type: 'property_type', value: data.propertyType } // Add property type
+        ],
+        media: uploadedPhotos, // All uploaded images
+        documents: [], // Can add documents later
+        house_rules: 'No smoking, No pets, Quiet hours 10pm-7am',
+        amenities: ['WiFi', 'AC', 'Parking'],
+        verification: {
+          verified: false,
+          verification_date: '',
+          verifier: ''
+        }
+      };
+
+      // Mint NFT with metadata on IPFS
+      const mintResult = await web3Service.mintRentalNFT(metadata);
+      
+      if (mintResult.success) {
+        toast.success('Property NFT minted successfully on BSC Testnet!', {
+          description: `Token ID: ${mintResult.tokenId}`
+        });
+        
+        // Store in local service as well (for demo)
+        const newListing = create({
+          ...data,
+          id: propertyId,
+          tokenId: mintResult.tokenId,
+          tokenURI: mintResult.tokenURI,
+          photos: uploadedPhotos.map(url => pinataService.getGatewayUrl(url)),
+          coverImage: 0,
+          amenities: ['WiFi', 'AC', 'Parking']
+        });
+
+        navigate('/landlord');
+      } else {
+        throw new Error(mintResult.error);
+      }
     } catch (error) {
       console.error('Failed to create listing:', error);
       toast.error('Failed to create listing. Please try again.');
+    } finally {
+      setIsMinting(false);
     }
   };
 
@@ -95,17 +197,6 @@ export function AddListing() {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     }
-  };
-
-  const handlePhotoUpload = () => {
-    // Mock photo upload
-    const mockPhotos = [
-      '/mock-images/property-1.jpg',
-      '/mock-images/property-2.jpg',
-      '/mock-images/property-3.jpg'
-    ];
-    setPhotos(mockPhotos);
-    toast.success('Photos uploaded (demo)');
   };
 
   return (
@@ -187,6 +278,47 @@ export function AddListing() {
                     <option value="CoLiving">Co-Living</option>
                     <option value="House">House</option>
                   </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                      Bedrooms
+                    </label>
+                    <input
+                      type="number"
+                      {...register('bedrooms', { valueAsNumber: true })}
+                      className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                      placeholder="2"
+                      min="0"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                      Bathrooms
+                    </label>
+                    <input
+                      type="number"
+                      {...register('bathrooms', { valueAsNumber: true })}
+                      className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                      placeholder="1"
+                      min="0"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                      Area (sq ft)
+                    </label>
+                    <input
+                      type="number"
+                      {...register('areaSqft', { valueAsNumber: true })}
+                      className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                      placeholder="1000"
+                      min="1"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -341,7 +473,7 @@ export function AddListing() {
                 <div className="bg-nb-accent/20 border-2 border-nb-accent rounded-nb p-4">
                   <h3 className="font-medium text-nb-ink mb-2">Payment Information</h3>
                   <p className="text-sm text-nb-ink/70">
-                    Payments will be accepted in BNB (demo). All funds are held in escrow until rental completion.
+                    Payments will be accepted in BNB. All funds are held in escrow until rental completion.
                   </p>
                 </div>
               </div>
@@ -355,23 +487,36 @@ export function AddListing() {
                 
                 <div className="border-2 border-dashed border-nb-ink rounded-nb p-8 text-center">
                   <Upload className="w-12 h-12 text-nb-ink/40 mx-auto mb-4" />
-                  <h3 className="font-medium text-nb-ink mb-2">Upload Photos</h3>
+                  <h3 className="font-medium text-nb-ink mb-2">Upload Photos to IPFS</h3>
                   <p className="text-sm text-nb-ink/70 mb-4">
-                    Add photos to showcase your property (demo)
+                    Your photos will be stored on IPFS via Pinata
                   </p>
-                  <NBButton type="button" onClick={handlePhotoUpload}>
-                    Upload Photos (Demo)
-                  </NBButton>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                    id="photo-upload"
+                    disabled={isUploading}
+                  />
+                  <label htmlFor="photo-upload">
+                    <span className="inline-flex items-center justify-center whitespace-nowrap rounded-nb text-sm font-medium transition-all duration-200 ease-out border-2 border-nb-ink shadow-nb hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-nb-accent disabled:pointer-events-none disabled:opacity-50 bg-nb-accent text-nb-ink hover:bg-nb-accent/90 h-10 px-4 py-2 cursor-pointer">
+                      {isUploading ? 'Uploading...' : 'Select Photos'}
+                    </span>
+                  </label>
                 </div>
 
-                {photos.length > 0 && (
+                {uploadedPhotos.length > 0 && (
                   <div>
-                    <h3 className="font-medium text-nb-ink mb-4">Uploaded Photos</h3>
+                    <h3 className="font-medium text-nb-ink mb-4">
+                      Uploaded Photos ({uploadedPhotos.length})
+                    </h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {photos.map((photo, index) => (
+                      {uploadedPhotos.map((photo, index) => (
                         <div key={index} className="relative">
                           <img
-                            src={photo}
+                            src={pinataService.getGatewayUrl(photo)}
                             alt={`Property ${index + 1}`}
                             className="w-full h-32 object-cover rounded border-2 border-nb-ink"
                           />
@@ -453,7 +598,7 @@ export function AddListing() {
                 <div className="bg-nb-warn/20 border-2 border-nb-warn rounded-nb p-4">
                   <h3 className="font-medium text-nb-ink mb-2">Ready to publish?</h3>
                   <p className="text-sm text-nb-ink/70">
-                    Review your listing details and click "Create Listing" to make it live on FairBNB.
+                    Review your listing details and click "Create Listing" to mint your property NFT.
                   </p>
                 </div>
 
@@ -462,6 +607,9 @@ export function AddListing() {
                     <h3 className="font-medium text-nb-ink">Property Details</h3>
                     <p className="text-sm text-nb-ink/70">
                       {watch('title')} • {watch('propertyType')} • {watch('city')}
+                    </p>
+                    <p className="text-sm text-nb-ink/70">
+                      {watch('bedrooms')} BR • {watch('bathrooms')} BA • {watch('areaSqft')} sq ft
                     </p>
                   </div>
                   
@@ -477,6 +625,13 @@ export function AddListing() {
                     <h3 className="font-medium text-nb-ink">Duration</h3>
                     <p className="text-sm text-nb-ink/70">
                       {watch('minDurationMonths')}-{watch('maxDurationMonths')} months
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h3 className="font-medium text-nb-ink">Photos</h3>
+                    <p className="text-sm text-nb-ink/70">
+                      {uploadedPhotos.length} photos uploaded to IPFS
                     </p>
                   </div>
                 </div>
@@ -505,8 +660,12 @@ export function AddListing() {
                 Next
               </NBButton>
             ) : (
-              <NBButton type="submit" data-testid="create-listing">
-                Create Listing
+              <NBButton 
+                type="submit" 
+                data-testid="create-listing"
+                disabled={isMinting}
+              >
+                {isMinting ? 'Minting NFT...' : 'Create Listing'}
               </NBButton>
             )}
           </div>
