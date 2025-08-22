@@ -273,7 +273,7 @@ export function Layout({ children }) {
       </main>
 
       {/* Footer */}
-      <footer className="bg-nb-card border-t-2 border-nb-ink mt-auto">
+      <footer className="bg-nb-card border-t-2 border-nb-ink mt-auto mt-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
@@ -315,7 +315,7 @@ export function Layout({ children }) {
           <div className="border-t-2 border-nb-ink/20 pt-6 mt-8">
             <div className="flex flex-col sm:flex-row justify-between items-center">
               <p className="text-sm text-nb-ink/70 font-body">
-                © 2025 FairBNB Demo. Built with React + Vite.
+                © 2025 FairBNB Demo. Made with {'<3'} by NGM GNG.
               </p>
               <p className="text-xs text-nb-ink/50 font-body mt-2 sm:mt-0">
                 v1.0.0
