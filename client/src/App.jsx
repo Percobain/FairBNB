@@ -23,6 +23,7 @@ function App() {
           <Route path="/landlord/disputes/:id" element={<LandlordDispute />} />
           <Route path="/tenant" element={<TenantExplore />} />
           <Route path="/tenant/listing/:id" element={<ListingDetails />} />
+          <Route path="/tenant/escrow" element={<EscrowActions />} />
           <Route path="/tenant/escrow/:rentalId" element={<EscrowActions />} />
           <Route path="/disputes/new" element={<NewDispute />} />
           <Route path="/jury" element={<JuryDashboard />} />

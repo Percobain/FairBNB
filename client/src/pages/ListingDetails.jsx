@@ -11,7 +11,7 @@ import { Gallery } from '@/components/Gallery';
 import { PricingWidget } from '@/components/PricingWidget';
 import { web3Service } from '@/lib/services/web3Service';
 import { useAppStore } from '@/lib/stores/useAppStore';
-import { MapPin, User, Calendar, Home, Wifi, Car, Shield, Star, Building } from 'lucide-react';
+import { MapPin, User, Calendar, Home, Wifi, Car, Shield, Star, Building, ShieldCheck } from 'lucide-react';
 
 /**
  * Property listing details with blockchain data
@@ -25,6 +25,7 @@ export function ListingDetails() {
   const [loading, setLoading] = useState(true);
   const [rentalDetails, setRentalDetails] = useState(null);
   const [listingDetails, setListingDetails] = useState(null);
+  const [isCurrentUserInvolved, setIsCurrentUserInvolved] = useState(false);
 
   // Helper function to convert IPFS URL to gateway URL
   const getImageUrl = (ipfsUrl) => {
@@ -76,6 +77,14 @@ export function ListingDetails() {
         // Get owner address
         const owner = await web3Service.contract.ownerOf(id);
 
+        // Check if current user is involved in this rental
+        const currentAccount = web3Service.getAccount();
+        const isInvolved = rentalResult.isActive && 
+          (rentalResult.tenant.toLowerCase() === currentAccount.toLowerCase() || 
+           rentalResult.landlord.toLowerCase() === currentAccount.toLowerCase());
+
+        setIsCurrentUserInvolved(isInvolved);
+
         // Create mock photos array with the main image
         const photos = [
           imageUrl,
@@ -120,7 +129,8 @@ export function ListingDetails() {
           tenant: rentalResult.tenant,
           createdAt: metadata.createdAt,
           imageUrl: imageUrl,
-          metadata: metadata
+          metadata: metadata,
+          rentalDetails: rentalResult
         };
 
         setProperty(propertyData);
@@ -170,6 +180,11 @@ export function ListingDetails() {
       console.error('Booking failed:', error);
       toast.error('Booking failed. Please try again.');
     }
+  };
+
+  const handleEscrowActions = () => {
+    // Navigate to escrow page with the rental ID (which is the token ID)
+    navigate(`/tenant/escrow/${property.tokenId}`);
   };
 
   const tabs = [
@@ -234,7 +249,7 @@ export function ListingDetails() {
                 <span className="px-3 py-1 bg-nb-accent text-nb-ink text-sm rounded border border-nb-ink">
                   {property.propertyType}
                 </span>
-                {property.isListed && (
+                {property.isListed && !property.isRented && (
                   <span className="px-3 py-1 bg-nb-warn text-nb-ink text-sm rounded border border-nb-ink">
                     Available
                   </span>
@@ -244,12 +259,31 @@ export function ListingDetails() {
                     Rented
                   </span>
                 )}
+                {property.isDisputed && (
+                  <span className="px-3 py-1 bg-nb-error text-nb-ink text-sm rounded border border-nb-ink">
+                    Disputed
+                  </span>
+                )}
                 <div className="flex items-center text-sm text-nb-ink/70">
                   <Star className="w-4 h-4 mr-1 fill-current text-nb-warn" />
                   4.8 (24 reviews)
                 </div>
               </div>
             </div>
+
+            {/* Escrow Actions Button */}
+            {property.isRented && isCurrentUserInvolved && (
+              <div className="mt-4 lg:mt-0">
+                <NBButton
+                  onClick={handleEscrowActions}
+                  size="lg"
+                  icon={<ShieldCheck className="w-5 h-5" />}
+                  className="bg-nb-accent hover:bg-nb-accent/80"
+                >
+                  Manage Rental
+                </NBButton>
+              </div>
+            )}
           </div>
         </div>
 
@@ -258,6 +292,38 @@ export function ListingDetails() {
           <div className="lg:col-span-2 space-y-8">
             {/* Gallery */}
             <Gallery images={property.photos} coverIndex={property.coverImage} />
+
+            {/* Rental Status Card - Show when property is rented */}
+            {property.isRented && (
+              <NBCard className="border-2 border-nb-accent">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-nb-accent border-2 border-nb-ink rounded-nb flex items-center justify-center">
+                    <ShieldCheck className="w-6 h-6 text-nb-ink" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-display font-bold text-lg text-nb-ink">
+                      Property is Currently Rented
+                    </h3>
+                    <p className="text-sm text-nb-ink/70">
+                      This property is under an active rental agreement with escrow protection.
+                    </p>
+                    {isCurrentUserInvolved && (
+                      <p className="text-sm text-nb-accent font-medium mt-1">
+                        You are involved in this rental agreement.
+                      </p>
+                    )}
+                  </div>
+                  {isCurrentUserInvolved && (
+                    <NBButton
+                      onClick={handleEscrowActions}
+                      icon={<ShieldCheck className="w-4 h-4" />}
+                    >
+                      View Details
+                    </NBButton>
+                  )}
+                </div>
+              </NBCard>
+            )}
 
             {/* Landlord Info */}
             <NBCard>
