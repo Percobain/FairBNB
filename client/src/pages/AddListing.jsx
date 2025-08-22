@@ -1033,7 +1033,6 @@
 //     );
 // }
 
-
 /**
  * @fileoverview Enhanced Add new listing page with FairBNB contract and Greenfield integration
  * This maintains ALL existing functionality while adding optional Greenfield upload capabilities
@@ -1062,10 +1061,13 @@ let enhancedWeb3Service = null;
 let useGreenfield = null;
 
 try {
-    enhancedWeb3Service = require("@/lib/services/enhancedWeb3Service").enhancedWeb3Service;
+    enhancedWeb3Service =
+        require("@/lib/services/enhancedWeb3Service").enhancedWeb3Service;
     useGreenfield = require("@/hooks/useGreenfield").useGreenfield;
 } catch (error) {
-    console.log("Greenfield integration not available, using standard functionality");
+    console.log(
+        "Greenfield integration not available, using standard functionality"
+    );
 }
 
 const listingSchema = z.object({
@@ -1155,7 +1157,7 @@ export function AddListing() {
 
         setIsSubmitting(true);
         setUploadProgress(0);
-        setSelectedService('pinata');
+        setSelectedService("pinata");
 
         try {
             // Check if Web3 is connected (EXISTING FUNCTIONALITY PRESERVED)
@@ -1190,7 +1192,10 @@ export function AddListing() {
             setUploadProgress(20);
 
             // Use original service for PINATA (IPFS) only
-            const mintResult = await web3Service.mintProperty(metadata, selectedImage);
+            const mintResult = await web3Service.mintProperty(
+                metadata,
+                selectedImage
+            );
 
             if (!mintResult.success) {
                 throw new Error(mintResult.error);
@@ -1244,7 +1249,7 @@ export function AddListing() {
         setIsSubmitting(true);
         setUploadProgress(0);
         setGreenfieldProgress({ image: 0, metadata: 0 });
-        setSelectedService('greenfield');
+        setSelectedService("greenfield");
 
         try {
             // Check if Web3 is connected (EXISTING FUNCTIONALITY PRESERVED)
@@ -1266,3 +1271,623 @@ export function AddListing() {
                 city: data.city,
                 state: data.state,
                 country: data.country,
+                pincode: data.pincode,
+                rentPerMonth: data.rentPerMonth,
+                securityDeposit: data.securityDeposit,
+                disputeFee: data.disputeFee,
+                availableFrom: data.availableFrom,
+                minDurationMonths: data.minDurationMonths,
+                maxDurationMonths: data.maxDurationMonths,
+                createdAt: new Date().toISOString(),
+            };
+            setUploadProgress(20);
+            // Upload image to Greenfield
+            const imageObjectName = `property-images/${Date.now()}-${
+                selectedImage.name
+            }`;
+            const greenfieldImageResult =
+                await enhancedGreenfieldService.uploadToGreenfield(
+                    data.address,
+                    data.provider,
+                    selectedImage,
+                    imageObjectName,
+                    (progress) => {
+                        setGreenfieldProgress((prev) => ({
+                            ...prev,
+                            image: progress,
+                        }));
+                    }
+                );
+            if (!greenfieldImageResult.success) {
+                throw new Error(greenfieldImageResult.error);
+            }
+
+            setUploadProgress(50);
+            // Upload metadata to Greenfield
+            const metadataObjectName = `metadata/${greenfieldImageResult.objectId}/metadata.json`;
+            const greenfieldMetadataResult =
+                await enhancedGreenfieldService.uploadMetadata(
+                    metadata,
+                    metadataObjectName,
+                    (progress) => {
+                        setGreenfieldProgress((prev) => ({
+                            ...prev,
+                            metadata: progress,
+                        }));
+                    }
+                );
+            if (!greenfieldMetadataResult.success) {
+                throw new Error(greenfieldMetadataResult.error);
+            }
+            setUploadProgress(80);
+            // List the property for rent (EXISTING FUNCTIONALITY PRESERVED)
+            const listResult = await web3Service.listProperty(
+                greenfieldImageResult.tokenId,
+                data.rentPerMonth,
+                data.securityDeposit,
+                data.disputeFee,
+                greenfieldImageResult.greenfieldUrl,
+                greenfieldImageResult.objectId
+            );
+            if (!listResult.success) {
+                throw new Error(listResult.error);
+            }
+            setUploadProgress(100);
+            toast.success("Listing created successfully!", {
+                description: `Property
+    NFT minted with ID: ${greenfieldImageResult.tokenId} (stored on Greenfield)`,
+            });
+            navigate("/landlord");
+        } catch (error) {
+            console.error("Failed to create listing:", error);
+            toast.error("Failed to create listing", {
+                description: error.message,
+            });
+        } finally {
+            setIsSubmitting(false);
+            setUploadProgress(0);
+            setGreenfieldProgress({ image: 0, metadata: 0 });
+            setSelectedService(null);
+        }
+    };
+    // Submit to both PINATA and Greenfield
+    const onSubmitToBoth = async (data) => {
+        try {
+            await onSubmitToPinata(data);
+            await onSubmitToGreenfield(data);
+        } catch (error) {
+            console.error("Failed to submit to both:", error);
+            toast.error("Failed to submit to both", {
+                description: error.message,
+            });
+        }
+    };
+    // Handle form submission based on selected service
+    const onSubmit = async (data) => {
+        if (selectedService === "pinata") {
+            await onSubmitToPinata(data);
+        } else if (selectedService === "greenfield") {
+            await onSubmitToGreenfield(data);
+        } else {
+            await onSubmitToBoth(data);
+        }
+    };
+    // Step navigation handlers
+    const nextStep = () => {
+        if (currentStep < steps.length - 1) {
+            setCurrentStep((prev) => prev + 1);
+        }
+    };
+    const prevStep = () => {
+        if (currentStep > 0) {
+            setCurrentStep((prev) => prev - 1);
+        }
+    };
+    // Handle image selection
+    const handleImageChange = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            setSelectedImage(file);
+        }
+    };
+    // Handle image removal
+    const handleImageRemove = () => {
+        setSelectedImage(null);
+    };
+    return (
+        <div className="container mx-auto px-4 py-8">
+            <div className="max-w-3xl mx-auto">
+                <h1 className="text-2xl font-bold mb-6">Add New Listing</h1>
+                <NBCard>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold">
+                            {steps[currentStep].title}
+                        </h2>
+                        <p className="text-sm text-nb-ink/70">
+                            {steps[currentStep].description}
+                        </p>
+                    </div>
+                    <form
+                        onSubmit={handleSubmit(onSubmit)}
+                        className="space-y-6"
+                    >
+                        {/* Step 1: Basics */}
+                        {currentStep === 0 && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Title *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        {...register("title")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.title && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.title.message}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Property Type *
+                                    </label>
+                                    <select
+                                        {...register("propertyType")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    >
+                                        <option value="Apartment">
+                                            Apartment
+                                        </option>
+                                        <option value="Studio">Studio</option>
+                                        <option value="PG">PG</option>
+                                        <option value="CoLiving">
+                                            Co-Living
+                                        </option>
+                                        <option value="House">House</option>
+                                    </select>
+                                    {errors.propertyType && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.propertyType.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Description *
+                                    </label>
+                                    <textarea
+                                        {...register("description")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.description && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.description.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Address *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        {...register("address")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.address && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.address.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        City *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        {...register("city")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.city && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.city.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        State *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        {...register("state")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.state && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.state.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label
+                                        className="block text-sm font-medium text-nb-ink mb-2
+
+                                        "
+                                    >
+                                        Country *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        {...register("country")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.country && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.country.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label
+                                        className="block text-sm font-medium text-nb-ink mb-2
+                                        "
+                                    >
+                                        Pincode *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        {...register("pincode")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.pincode && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.pincode.message}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {/* Step 2: Pricing */}
+                        {currentStep === 1 && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Rent Per Month *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        {...register("rentPerMonth", {
+                                            valueAsNumber: true,
+                                        })}
+                                        onChange={(e) =>
+                                            handleRentChange(e.target.value)
+                                        }
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.rentPerMonth && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.rentPerMonth.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Security Deposit *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        {...register("securityDeposit", {
+                                            valueAsNumber: true,
+                                        })}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.securityDeposit && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.securityDeposit.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Dispute Fee *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        {...register("disputeFee", {
+                                            valueAsNumber: true,
+                                        })}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.disputeFee && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.disputeFee.message}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {/* Step 3: Media */}
+                        {currentStep === 2 && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Property Image *
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageChange}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {selectedImage && (
+                                        <div className="mt-2 flex items-center space-x-2">
+                                            <span className="text-sm text-nb-ink">
+                                                {selectedImage.name}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={handleImageRemove}
+                                                className="text-red-500 hover:text-red-700"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+                                    {errors.image && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.image.message}
+                                        </p>
+                                    )}
+                                </div>
+                                {enhancedWeb3Service && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-nb-ink mb-2">
+                                            Storage Service
+                                        </label>
+                                        <select
+                                            value={selectedService || ""}
+                                            onChange={(e) =>
+                                                setSelectedService(
+                                                    e.target.value
+                                                )
+                                            }
+                                            className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                        >
+                                            <option value="">
+                                                Select Service
+                                            </option>
+                                            <option value="pinata">
+                                                Pinata (IPFS)
+                                            </option>
+                                            <option value="greenfield">
+                                                Greenfield
+                                            </option>
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {/* Step 4: Availability */}
+                        {currentStep === 3 && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Available From *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        {...register("availableFrom")}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.availableFrom && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.availableFrom.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Minimum Duration (Months) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        {...register("minDurationMonths", {
+                                            valueAsNumber: true,
+                                        })}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.minDurationMonths && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.minDurationMonths.message}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-nb-ink mb-2">
+                                        Maximum Duration (Months) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        {...register("maxDurationMonths", {
+                                            valueAsNumber: true,
+                                        })}
+                                        className="w-full px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink focus:outline-none focus:ring-4 focus:ring-nb-accent"
+                                    />
+                                    {errors.maxDurationMonths && (
+                                        <p className="text-nb-error text-sm mt-1">
+                                            {errors.maxDurationMonths.message}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {/* Step 5: Review */}
+                        {currentStep === 4 && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-semibold mb-2">
+                                    Review Your Listing
+                                </h3>
+                                <div className="space-y-2">
+                                    <p>
+                                        <strong>Title:</strong> {watch("title")}
+                                    </p>
+                                    <p>
+                                        <strong>Property Type:</strong>{" "}
+                                        {watch("propertyType")}
+                                    </p>
+                                    <p>
+                                        <strong>Description:</strong>{" "}
+                                        {watch("description")}
+                                    </p>
+                                    <p>
+                                        <strong>Address:</strong>{" "}
+                                        {watch("address")}, {watch("city")},{" "}
+                                        {watch("state")} {watch("country")} -{" "}
+                                        {watch("pincode")}
+                                    </p>
+                                    <p>
+                                        <strong>Rent Per Month:</strong>{" "}
+                                        {rentPerMonth}
+                                    </p>
+                                    <p>
+                                        <strong>Security Deposit:</strong>{" "}
+                                        {watch("securityDeposit")}
+                                    </p>
+                                    <p>
+                                        <strong>Dispute Fee:</strong>{" "}
+                                        {watch("disputeFee")}
+                                    </p>
+                                    <p>
+                                        <strong>Available From:</strong>{" "}
+                                        {watch("availableFrom")}
+                                    </p>
+                                    <p>
+                                        <strong>Min Duration (Months):</strong>{" "}
+                                        {watch("minDurationMonths")}
+                                    </p>
+                                    <p>
+                                        <strong>Max Duration (Months):</strong>{" "}
+                                        {watch("maxDurationMonths")}
+                                    </p>
+                                </div>
+                                {selectedImage && (
+                                    <div className="mt-4">
+                                        <img
+                                            src={URL.createObjectURL(
+                                                selectedImage
+                                            )}
+                                            alt="Selected Property"
+                                            className="w-full h-auto rounded-nb"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {/* Navigation Buttons */}
+                        <div className="flex justify-between mt-6">
+                            {currentStep > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={prevStep}
+                                    className="px-4 py-2 bg-nb-secondary text-white rounded-nb hover:bg-nb-secondary-dark"
+                                >
+                                    Previous
+                                </button>
+                            )}
+                            {currentStep < steps.length - 1 ? (
+                                <button
+                                    type="button"
+                                    onClick={nextStep}
+                                    className="px-4 py-2 bg-nb-primary text-white rounded-nb hover:bg-nb-primary-dark"
+                                >
+                                    Next
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={submitForm}
+                                    className="px-4 py-2 bg-nb-primary text-white rounded-nb hover:bg-nb-primary-dark"
+                                >
+                                    Submit
+                                </button>
+                            )}
+                        </div>
+                        {/* Submit Button */}
+                        {currentStep === steps.length - 1 && (
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`w-full px-4 py-2 bg-nb-primary text-white rounded-nb hover:bg-nb-primary-dark ${
+                                    isSubmitting
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : ""
+                                }`}
+                            >
+                                {isSubmitting ? (
+                                    <div className="flex items-center justify-center">
+                                        <Loader2 className="animate-spin mr-2" />
+                                        Submitting...
+                                    </div>
+                                ) : (
+                                    "Create Listing"
+                                )}
+                            </button>
+                        )}
+                        {/* Upload Progress */}
+                        {isSubmitting && (
+                            <div className="mt-4">
+                                <div className="text-sm text-nb-ink mb-2">
+                                    Upload Progress: {uploadProgress}%
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-nb h-2">
+                                    <div
+                                        className="bg-nb-primary h-full rounded-nb"
+                                        style={{ width: `${uploadProgress}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        )}
+                        {/* Greenfield Progress */}
+                        {greenfieldProgress.image > 0 && (
+                            <div className="mt-4">
+                                <div className="text-sm text-nb-ink mb-2">
+                                    Greenfield Image Upload Progress:{" "}
+                                    {greenfieldProgress.image}%
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-nb h-2">
+                                    <div
+                                        className="bg-nb-primary h-full rounded-nb"
+                                        style={{
+                                            width: `${greenfieldProgress.image}%`,
+                                        }}
+                                    ></div>
+                                </div>
+                            </div>
+                        )}
+                        {greenfieldProgress.metadata > 0 && (
+                            <div className="mt-4">
+                                <div className="text-sm text-nb-ink mb-2">
+                                    Greenfield Metadata Upload Progress:{" "}
+                                    {greenfieldProgress.metadata}%
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-nb h-2">
+                                    <div
+                                        className="bg-nb-primary h-full rounded-nb"
+                                        style={{
+                                            width: `${greenfieldProgress.metadata}%`,
+                                        }}
+                                    ></div>
+                                </div>
+                            </div>
+                        )}
+                    </form>
+                </NBCard>
+            </div>
+        </div>
+    );
+}

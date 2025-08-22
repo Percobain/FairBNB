@@ -54,8 +54,8 @@ export function AddListingEnhanced() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
 
-    // Greenfield integration states
-    const [enableGreenfield, setEnableGreenfield] = useState(true); // Default enabled
+    // Storage choice: 'ipfs' or 'greenfield' (either/or, not both)
+    const [storageChoice, setStorageChoice] = useState('ipfs'); // Default to IPFS
     const [greenfieldProgress, setGreenfieldProgress] = useState({
         image: 0,
         metadata: 0,
@@ -95,7 +95,7 @@ export function AddListingEnhanced() {
         setValue("securityDeposit", Number(value) * 2);
     };
 
-    // Enhanced onSubmit that maintains existing functionality while adding Greenfield
+    // Enhanced onSubmit with either/or storage choice
     const onSubmit = async (data) => {
         if (!selectedImage) {
             toast.error("Please select a property image");
@@ -109,6 +109,7 @@ export function AddListingEnhanced() {
         try {
             // Check if Web3 is connected (EXISTING FUNCTIONALITY PRESERVED)
             if (!web3Service.isWeb3Connected()) {
+                toast.info("Connecting to wallet...");
                 const initResult = await web3Service.initialize();
                 if (!initResult.success) {
                     throw new Error(initResult.error);
@@ -140,61 +141,63 @@ export function AddListingEnhanced() {
 
             let mintResult;
 
-            // Choose between enhanced (with Greenfield) or original minting
-            if (enableGreenfield) {
-                // Try to get account and provider for Greenfield
+            // Choose storage based on user selection (either/or)
+            if (storageChoice === 'greenfield') {
+                // Use Greenfield storage ONLY
                 try {
-                    const accounts =
-                        (await window.ethereum?.request({
-                            method: "eth_accounts",
-                        })) || [];
+                    toast.info("Uploading to Greenfield...");
+                    const accounts = (await window.ethereum?.request({
+                        method: "eth_accounts",
+                    })) || [];
                     const provider = window.ethereum;
 
                     if (accounts.length > 0 && provider) {
-                        // Use enhanced service with Greenfield
-                        mintResult =
-                            await enhancedWeb3Service.mintPropertyWithGreenfield(
-                                metadata,
-                                selectedImage,
-                                {
-                                    address: accounts[0],
-                                    provider: provider,
-                                    onImageProgress: (progress) => {
-                                        setGreenfieldProgress((prev) => ({
-                                            ...prev,
-                                            image: progress.percent,
-                                        }));
-                                    },
-                                    onMetadataProgress: (progress) => {
-                                        setGreenfieldProgress((prev) => ({
-                                            ...prev,
-                                            metadata: progress.percent,
-                                        }));
-                                    },
-                                }
-                            );
-                    } else {
-                        throw new Error(
-                            "Wallet not properly connected for Greenfield"
+                        // Use enhanced service with Greenfield storage
+                        mintResult = await enhancedWeb3Service.mintPropertyWithStorage(
+                            metadata,
+                            selectedImage,
+                            {
+                                useGreenfield: true,
+                                address: accounts[0],
+                                provider: provider,
+                                onImageProgress: (progress) => {
+                                    setGreenfieldProgress((prev) => ({
+                                        ...prev,
+                                        image: progress.percent,
+                                    }));
+                                },
+                                onMetadataProgress: (progress) => {
+                                    setGreenfieldProgress((prev) => ({
+                                        ...prev,
+                                        metadata: progress.percent,
+                                    }));
+                                },
+                            }
                         );
+                    } else {
+                        throw new Error("Wallet not properly connected for Greenfield");
                     }
                 } catch (greenfieldError) {
-                    console.warn(
-                        "Greenfield upload failed, falling back to IPFS only:",
-                        greenfieldError
-                    );
-                    // Fallback to original minting (PRESERVES EXISTING FUNCTIONALITY)
-                    mintResult = await web3Service.mintProperty(
-                        metadata,
-                        selectedImage
-                    );
+                    console.warn("Greenfield upload failed:", greenfieldError);
+                    toast.error("Greenfield upload failed", {
+                        description: greenfieldError.message,
+                    });
+                    throw greenfieldError;
                 }
             } else {
-                // Use original service (EXISTING FUNCTIONALITY PRESERVED)
-                mintResult = await web3Service.mintProperty(
-                    metadata,
-                    selectedImage
-                );
+                // Use IPFS storage ONLY (default or when explicitly chosen)
+                toast.info("Uploading to IPFS...");
+                try {
+                    mintResult = await enhancedWeb3Service.mintPropertyWithStorage(
+                        metadata,
+                        selectedImage,
+                        { useGreenfield: false }
+                    );
+                } catch (ipfsError) {
+                    console.warn("IPFS mint failed, trying fallback:", ipfsError);
+                    // Fallback to original service (PRESERVES EXISTING FUNCTIONALITY)
+                    mintResult = await web3Service.mintProperty(metadata, selectedImage);
+                }
             }
 
             if (!mintResult.success) {
@@ -204,6 +207,7 @@ export function AddListingEnhanced() {
             setUploadProgress(80);
 
             // List the property for rent (EXISTING FUNCTIONALITY PRESERVED)
+            toast.info("Listing property for rent...");
             const listResult = await web3Service.listProperty(
                 mintResult.tokenId,
                 data.rentPerMonth,
@@ -217,21 +221,38 @@ export function AddListingEnhanced() {
 
             setUploadProgress(100);
 
-            // Enhanced success message
-            const successMessage =
-                enableGreenfield && mintResult.greenfield?.enabled
-                    ? `Property NFT minted with ID: ${mintResult.tokenId}. Also uploaded to Greenfield!`
-                    : `Property NFT minted with ID: ${mintResult.tokenId}`;
-
+            // Enhanced success message with storage info
+            const storageInfo = mintResult.storageType === 'greenfield' ? 
+                'stored on BNB Greenfield' : 'stored on IPFS';
+            
             toast.success("Listing created successfully!", {
-                description: successMessage,
+                description: `Property NFT minted with ID: ${mintResult.tokenId} (${storageInfo})`,
             });
 
             navigate("/landlord");
         } catch (error) {
             console.error("Failed to create listing:", error);
-            toast.error("Failed to create listing", {
-                description: error.message,
+            
+            // Enhanced error handling
+            let errorMessage = error.message;
+            let errorDescription = "";
+
+            if (error.message.includes("User denied")) {
+                errorMessage = "Transaction cancelled";
+                errorDescription = "You cancelled the transaction in your wallet";
+            } else if (error.message.includes("insufficient funds")) {
+                errorMessage = "Insufficient funds";
+                errorDescription = "You don't have enough BNB to pay for gas fees";
+            } else if (error.message.includes("Contract call failed")) {
+                errorMessage = "Smart contract error";
+                errorDescription = "Please check your wallet connection and try again";
+            } else if (error.message.includes("Internal JSON-RPC error")) {
+                errorMessage = "Network error";
+                errorDescription = "Please check your network connection and try again";
+            }
+
+            toast.error(errorMessage, {
+                description: errorDescription || error.message,
             });
         } finally {
             setIsSubmitting(false);
@@ -298,7 +319,7 @@ export function AddListingEnhanced() {
                     </h1>
                     <p className="font-body text-nb-ink/70">
                         Create a new property listing on the blockchain with
-                        optional Greenfield storage
+                        storage choice between IPFS and Greenfield
                     </p>
                 </div>
 
@@ -576,44 +597,51 @@ export function AddListingEnhanced() {
                                     Property Image & Storage
                                 </h2>
 
-                                {/* Storage Options - NEW ADDITION */}
+                                {/* Storage Choice - UPDATED TO RADIO BUTTONS */}
                                 <div className="bg-nb-accent/10 border-2 border-nb-accent/30 rounded-nb p-4">
                                     <h3 className="font-medium text-nb-ink mb-3">
-                                        Storage Options
+                                        Choose Storage Type (Either/Or)
                                     </h3>
                                     <div className="space-y-3">
-                                        <label className="flex items-center space-x-3">
+                                        <label className="flex items-center space-x-3 cursor-pointer">
                                             <input
-                                                type="checkbox"
-                                                checked={enableGreenfield}
-                                                onChange={(e) =>
-                                                    setEnableGreenfield(
-                                                        e.target.checked
-                                                    )
-                                                }
-                                                className="w-4 h-4 text-nb-accent border-2 border-nb-ink rounded focus:ring-2 focus:ring-nb-accent"
+                                                type="radio"
+                                                name="storageType"
+                                                value="ipfs"
+                                                checked={storageChoice === 'ipfs'}
+                                                onChange={(e) => setStorageChoice(e.target.value)}
+                                                className="w-4 h-4 text-nb-accent border-2 border-nb-ink focus:ring-2 focus:ring-nb-accent"
                                             />
                                             <div className="flex items-center space-x-2">
-                                                <Cloud className="w-4 h-4 text-nb-ink" />
+                                                <Database className="w-4 h-4 text-nb-ink" />
                                                 <span className="text-sm font-medium text-nb-ink">
-                                                    Enable BNB Greenfield
-                                                    Storage
+                                                    IPFS Storage (Pinata)
                                                 </span>
                                             </div>
                                         </label>
                                         <p className="text-xs text-nb-ink/70 ml-7">
-                                            Store your images on BNB Greenfield
-                                            in addition to IPFS for enhanced
-                                            decentralization and redundancy.
+                                            Store your images on IPFS using Pinata (standard FairBNB functionality)
                                         </p>
 
-                                        <div className="flex items-center space-x-2 ml-7">
-                                            <Database className="w-4 h-4 text-nb-ink/60" />
-                                            <span className="text-xs text-nb-ink/60">
-                                                IPFS storage is always enabled
-                                                (default FairBNB functionality)
-                                            </span>
-                                        </div>
+                                        <label className="flex items-center space-x-3 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="storageType"
+                                                value="greenfield"
+                                                checked={storageChoice === 'greenfield'}
+                                                onChange={(e) => setStorageChoice(e.target.value)}
+                                                className="w-4 h-4 text-nb-accent border-2 border-nb-ink focus:ring-2 focus:ring-nb-accent"
+                                            />
+                                            <div className="flex items-center space-x-2">
+                                                <Cloud className="w-4 h-4 text-nb-ink" />
+                                                <span className="text-sm font-medium text-nb-ink">
+                                                    BNB Greenfield Storage
+                                                </span>
+                                            </div>
+                                        </label>
+                                        <p className="text-xs text-nb-ink/70 ml-7">
+                                            Store your images on BNB Greenfield for enhanced decentralization
+                                        </p>
                                     </div>
                                 </div>
 
@@ -625,11 +653,8 @@ export function AddListingEnhanced() {
                                             Upload Property Image
                                         </h3>
                                         <p className="text-sm text-nb-ink/70 mb-4">
-                                            Select a high-quality image of your
-                                            property
-                                            {enableGreenfield
-                                                ? " (will be stored on IPFS and Greenfield)"
-                                                : " (will be stored on IPFS)"}
+                                            Select a high-quality image of your property
+                                            (will be stored on {storageChoice === 'greenfield' ? 'BNB Greenfield' : 'IPFS'})
                                         </p>
                                         <input
                                             type="file"
@@ -686,9 +711,7 @@ export function AddListingEnhanced() {
                                             MB
                                         </div>
                                         <div className="mt-2 text-xs text-nb-ink/60">
-                                            {enableGreenfield
-                                                ? "✓ Will be stored on both IPFS and BNB Greenfield"
-                                                : "✓ Will be stored on IPFS"}
+                                            ✓ Will be stored on {storageChoice === 'greenfield' ? 'BNB Greenfield' : 'IPFS'}
                                         </div>
                                     </div>
                                 )}
@@ -782,8 +805,7 @@ export function AddListingEnhanced() {
                                     <p className="text-sm text-nb-ink/70">
                                         Your property will be minted as an NFT
                                         on the blockchain and listed for rent.
-                                        {enableGreenfield &&
-                                            " Images will be stored on both IPFS and Greenfield."}{" "}
+                                        Image will be stored on {storageChoice === 'greenfield' ? 'BNB Greenfield' : 'IPFS'}.
                                         This action cannot be undone.
                                     </p>
                                 </div>
@@ -842,15 +864,16 @@ export function AddListingEnhanced() {
                                                 ).toFixed(2)}{" "}
                                                 MB)
                                             </p>
-                                            <div className="flex items-center space-x-4 mt-1">
-                                                <span className="flex items-center space-x-1 text-xs text-green-600">
-                                                    <Database className="w-3 h-3" />
-                                                    <span>IPFS</span>
-                                                </span>
-                                                {enableGreenfield && (
+                                            <div className="flex items-center space-x-2 mt-1">
+                                                {storageChoice === 'greenfield' ? (
                                                     <span className="flex items-center space-x-1 text-xs text-blue-600">
                                                         <Cloud className="w-3 h-3" />
-                                                        <span>Greenfield</span>
+                                                        <span>BNB Greenfield</span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center space-x-1 text-xs text-green-600">
+                                                        <Database className="w-3 h-3" />
+                                                        <span>IPFS</span>
                                                     </span>
                                                 )}
                                             </div>
@@ -879,7 +902,7 @@ export function AddListingEnhanced() {
                                                     "Initializing..."}
                                                 {uploadProgress >= 20 &&
                                                     uploadProgress < 80 &&
-                                                    "Uploading files and minting NFT..."}
+                                                    `Uploading to ${storageChoice === 'greenfield' ? 'Greenfield' : 'IPFS'} and minting NFT...`}
                                                 {uploadProgress >= 80 &&
                                                     uploadProgress < 100 &&
                                                     "Listing property..."}
@@ -889,7 +912,7 @@ export function AddListingEnhanced() {
                                         </div>
 
                                         {/* Greenfield Progress */}
-                                        {enableGreenfield &&
+                                        {storageChoice === 'greenfield' &&
                                             (greenfieldProgress.image > 0 ||
                                                 greenfieldProgress.metadata >
                                                     0) && (
