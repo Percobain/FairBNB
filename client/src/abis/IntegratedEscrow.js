@@ -1,4 +1,4 @@
-const EscrowABI = [
+export const EscrowABI = [
     {
       "inputs": [],
       "stateMutability": "nonpayable",

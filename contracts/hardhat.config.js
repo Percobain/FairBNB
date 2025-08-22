@@ -34,9 +34,14 @@ module.exports = {
       }
     },
     sepolia: {
-      url: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      url: `https://rpc.sepolia.ethpandaops.io`,
       accounts: [`0x${SEPOLIA_API_KEY}`],
       chainId: 11155111,
+    },
+     bsc: {
+      url: `https://bsc-testnet-dataseed.bnbchain.org`,
+      accounts: [`0x${SEPOLIA_API_KEY}`],
+      chainId: 97
     },
     hardhat: {
       // This is the default network when you run `npx hardhat test`

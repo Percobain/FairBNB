@@ -1,4 +1,4 @@
-const RentalNFTABI = [
+export const RentalNFTABI = [
     {
       "inputs": [
         {

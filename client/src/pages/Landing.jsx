@@ -5,15 +5,18 @@
 import { Link } from 'react-router-dom';
 import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
-import { Building, Search, Gavel, Shield, Coins, Users, ChevronDown } from 'lucide-react';
+import { Building, Search, Gavel, Shield, Coins, Users, ChevronDown, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAppStore } from '../lib/stores/useAppStore.js';
+import { toast } from 'sonner';
 
 /**
  * Landing page with hero, features, and CTAs
  */
 export function Landing() {
   const [openFaq, setOpenFaq] = useState(null);
+  const { web3, initializeWeb3, disconnectWeb3 } = useAppStore();
 
   const roleCards = [
     {
@@ -71,16 +74,21 @@ export function Landing() {
   const howItWorks = [
     {
       step: '01',
+      title: 'Connect Wallet',
+      description: 'Connect your MetaMask wallet to access the decentralized rental platform.'
+    },
+    {
+      step: '02',
       title: 'Mint NFT',
       description: 'Landlords create NFT listings with verified property details and rental terms.'
     },
     {
-      step: '02',
+      step: '03',
       title: 'Escrow',
       description: 'Tenants book properties and funds are held securely in smart contracts.'
     },
     {
-      step: '03',
+      step: '04',
       title: 'DAO Dispute',
       description: 'Any disputes are resolved fairly by the decentralized community of jurors.'
     }
@@ -96,14 +104,34 @@ export function Landing() {
       answer: 'Disputes are resolved by a decentralized jury system where community members vote on fair outcomes based on evidence.'
     },
     {
-      question: 'Are the properties real?',
-      answer: 'This is a demo application. All properties and transactions are simulated for demonstration purposes only.'
+      question: 'How do I connect my wallet?',
+      answer: 'Click the "Connect Wallet" button and approve the connection in MetaMask. Make sure you\'re on the BNB Smart Chain testnet.'
     },
     {
       question: 'How do I become a juror?',
       answer: 'Simply switch to the Jury role in the header and start participating in dispute resolution to earn rewards.'
     }
   ];
+
+  const handleConnectWallet = async () => {
+    try {
+      await initializeWeb3();
+      if (web3.isConnected) {
+        toast.success('Wallet connected successfully!', {
+          description: `Connected to ${web3.account.slice(0, 6)}...${web3.account.slice(-4)}`
+        });
+      }
+    } catch (error) {
+      toast.error('Failed to connect wallet', {
+        description: error.message
+      });
+    }
+  };
+
+  const handleDisconnectWallet = () => {
+    disconnectWeb3();
+    toast.success('Wallet disconnected');
+  };
 
   return (
     <div className="space-y-20">
@@ -124,14 +152,54 @@ export function Landing() {
               The future of property rental powered by blockchain technology. 
               Secure, transparent, and fair for everyone.
             </p>
+            
+            {/* Wallet Connection */}
+            <div className="mb-8">
+              {!web3.isConnected ? (
+                <NBButton 
+                  size="lg" 
+                  onClick={handleConnectWallet}
+                  disabled={web3.isInitializing}
+                  className="mb-4"
+                >
+                  <Wallet className="w-5 h-5 mr-2" />
+                  {web3.isInitializing ? 'Connecting...' : 'Connect Wallet'}
+                </NBButton>
+              ) : (
+                <div className="mb-4">
+                  <div className="bg-nb-accent/20 border-2 border-nb-accent rounded-nb p-4 mb-4">
+                    <p className="text-sm text-nb-ink/80">
+                      Connected: {web3.account?.slice(0, 6)}...{web3.account?.slice(-4)}
+                    </p>
+                    <p className="text-xs text-nb-ink/60">
+                      Chain ID: {web3.chainId?.toString() || 'Unknown'}
+                    </p>
+                  </div>
+                  <NBButton 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={handleDisconnectWallet}
+                  >
+                    Disconnect
+                  </NBButton>
+                </div>
+              )}
+              
+              {web3.error && (
+                <div className="bg-nb-error/20 border-2 border-nb-error rounded-nb p-4 mb-4">
+                  <p className="text-sm text-nb-error">{web3.error}</p>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/tenant">
-                <NBButton size="lg" className="w-full sm:w-auto">
+                <NBButton size="lg" className="w-full sm:w-auto" disabled={!web3.isConnected}>
                   Explore Properties
                 </NBButton>
               </Link>
               <Link to="/landlord">
-                <NBButton variant="secondary" size="lg" className="w-full sm:w-auto">
+                <NBButton variant="secondary" size="lg" className="w-full sm:w-auto" disabled={!web3.isConnected}>
                   List Your Property
                 </NBButton>
               </Link>
@@ -180,7 +248,11 @@ export function Landing() {
                       ))}
                     </ul>
                     <Link to={`/${role}`}>
-                      <NBButton className="w-full" data-testid={testId}>
+                      <NBButton 
+                        className="w-full" 
+                        data-testid={testId}
+                        disabled={!web3.isConnected}
+                      >
                         Get Started
                       </NBButton>
                     </Link>
@@ -200,11 +272,11 @@ export function Landing() {
               How It Works
             </h2>
             <p className="font-body text-lg text-nb-ink/70">
-              Three simple steps to secure, transparent rentals
+              Four simple steps to secure, transparent rentals
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {howItWorks.map(({ step, title, description }, index) => (
               <motion.div
                 key={step}

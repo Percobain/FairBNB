@@ -1,0 +1,15 @@
+{
+  "network": "bsc",
+  "deployer": "0x71AfE44200A819171a0687b1026E8d4424472Ff8",
+  "deploymentTime": "2025-08-22T10:26:31.683Z",
+  "contracts": {
+    "rentalNFT": {
+      "address": "0x5630263676cCB2cE59Bebb8084d36d77136b8d86",
+      "name": "FairBNB Rental",
+      "symbol": "FBNB"
+    },
+    "integratedEscrow": {
+      "address": "0x7C4f508179a97b9831AcefCFE6E3aa2EC95d55D4"
+    }
+  }
+}
