@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -64,5 +66,29 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+/* Neobrutalist custom styles */
+@layer components {
+  .neo-text-shadow {
+    text-shadow: 2px 2px 0px #000000;
+  }
+  
+  .neo-text-shadow-lg {
+    text-shadow: 4px 4px 0px #000000;
+  }
+  
+  .neo-border-dashed {
+    border-style: dashed;
+  }
+  
+  .neo-rotate-1 {
+    transform: rotate(1deg);
+  }
+  
+  .neo-rotate-neg-1 {
+    transform: rotate(-1deg);
   }
 }
