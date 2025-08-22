@@ -167,14 +167,6 @@ export function Landing() {
                 </NBButton>
               ) : (
                 <div className="mb-4">
-                  <div className="bg-nb-accent/20 border-2 border-nb-accent rounded-nb p-4 mb-4">
-                    <p className="text-sm text-nb-ink/80">
-                      Connected: {web3.account?.slice(0, 6)}...{web3.account?.slice(-4)}
-                    </p>
-                    <p className="text-xs text-nb-ink/60">
-                      Chain ID: {web3.chainId?.toString() || 'Unknown'}
-                    </p>
-                  </div>
                   <NBButton 
                     variant="secondary" 
                     size="sm" 
