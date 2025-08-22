@@ -621,6 +621,108 @@ class Web3Service {
       };
     }
   }
+
+  /**
+   * Check if current user is jury
+   */
+  async isJury() {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const juryAddress = await this.contract.jury();
+      return this.account?.toLowerCase() === juryAddress.toLowerCase();
+    } catch (error) {
+      console.error('Failed to check jury status:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get jury address
+   */
+  async getJuryAddress() {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      return await this.contract.jury();
+    } catch (error) {
+      console.error('Failed to get jury address:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get pending withdrawal amount for current user
+   */
+  async getPendingWithdrawal() {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const amount = await this.contract.pendingWithdrawals(this.account);
+      return ethers.formatEther(amount);
+    } catch (error) {
+      console.error('Failed to get pending withdrawal:', error);
+      return '0';
+    }
+  }
+
+  /**
+   * Check if dispute has been resolved
+   */
+  async isDisputeResolved(tokenId) {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const rentalDetails = await this.contract.getRentalDetails(tokenId);
+      return !rentalDetails.isDisputed && !rentalDetails.isActive;
+    } catch (error) {
+      console.error('Failed to check dispute status:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get dispute resolution details
+   */
+  async getDisputeResolution(tokenId) {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const rentalDetails = await this.contract.getRentalDetails(tokenId);
+      const listingDetails = await this.contract.getListingDetails(tokenId);
+      
+      if (!rentalDetails.isDisputed && !rentalDetails.isActive) {
+        // Dispute has been resolved
+        const juryReward = ethers.formatEther(listingDetails.disputeFee / 2n);
+        
+        // Determine winner based on who gets the funds
+        // This is a simplified logic - in a real implementation, you'd track the resolution
+        const tenantWins = rentalDetails.tenant !== '0x0000000000000000000000000000000000000000';
+        
+        return {
+          resolved: true,
+          tenantWins,
+          juryReward,
+          totalDisputeFee: ethers.formatEther(listingDetails.disputeFee)
+        };
+      }
+      
+      return { resolved: false };
+    } catch (error) {
+      console.error('Failed to get dispute resolution:', error);
+      return { resolved: false };
+    }
+  }
 }
 
 // Export singleton instance
