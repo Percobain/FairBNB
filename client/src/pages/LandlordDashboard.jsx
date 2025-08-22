@@ -8,6 +8,7 @@ import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
 import { StatPill } from '@/components/StatPill';
 import { ListingCard } from '@/components/ListingCard';
+import { DashboardStatsSkeleton, ListingCardSkeleton, Skeleton } from '@/components/SkeletonLoader';
 import { web3Service } from '@/lib/services/web3Service';
 import { Plus, Building, DollarSign, AlertTriangle, Grid, List, RefreshCw } from 'lucide-react';
 
@@ -147,8 +148,65 @@ export function LandlordDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-nb-bg flex items-center justify-center">
-        <div className="text-nb-ink font-body">Loading your properties...</div>
+      <div className="min-h-screen bg-nb-bg py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header Skeleton */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
+            <div>
+              <Skeleton className="h-9 w-64 mb-2" />
+              <Skeleton className="h-5 w-96" />
+            </div>
+            <div className="flex items-center space-x-3 mt-4 sm:mt-0">
+              <Skeleton className="h-10 w-24" />
+              <Skeleton className="h-12 w-32" />
+            </div>
+          </div>
+
+          {/* Stats Skeleton */}
+          <DashboardStatsSkeleton />
+
+          {/* Listings Section Skeleton */}
+          <NBCard className="mb-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+              <Skeleton className="h-7 w-48 mb-4 sm:mb-0" />
+              <div className="flex items-center space-x-2">
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-8 w-16" />
+              </div>
+            </div>
+
+            {/* Properties Grid Skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <ListingCardSkeleton key={i} />
+              ))}
+            </div>
+          </NBCard>
+
+          {/* Quick Actions Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <NBCard>
+              <Skeleton className="h-6 w-32 mb-4" />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            </NBCard>
+
+            <NBCard>
+              <Skeleton className="h-6 w-32 mb-4" />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex justify-between items-center">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                ))}
+              </div>
+            </NBCard>
+          </div>
+        </div>
       </div>
     );
   }
@@ -188,28 +246,32 @@ export function LandlordDashboard() {
         </div>
 
         {/* Stats Strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatPill
-            label="Total Properties"
-            value={stats.total}
-            icon={<Building className="w-6 h-6" />}
-          />
-          <StatPill
-            label="Active Rentals"
-            value={stats.active}
-            icon={<DollarSign className="w-6 h-6" />}
-          />
-          <StatPill
-            label="Completed"
-            value={stats.completed}
-            icon={<Building className="w-6 h-6" />}
-          />
-          <StatPill
-            label="Disputes"
-            value={stats.disputed}
-            icon={<AlertTriangle className="w-6 h-6" />}
-          />
-        </div>
+        {refreshing ? (
+          <DashboardStatsSkeleton />
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <StatPill
+              label="Total Properties"
+              value={stats.total}
+              icon={<Building className="w-6 h-6" />}
+            />
+            <StatPill
+              label="Active Rentals"
+              value={stats.active}
+              icon={<DollarSign className="w-6 h-6" />}
+            />
+            <StatPill
+              label="Completed"
+              value={stats.completed}
+              icon={<Building className="w-6 h-6" />}
+            />
+            <StatPill
+              label="Disputes"
+              value={stats.disputed}
+              icon={<AlertTriangle className="w-6 h-6" />}
+            />
+          </div>
+        )}
 
         {/* Listings Section */}
         <NBCard className="mb-8">
@@ -237,7 +299,33 @@ export function LandlordDashboard() {
             </div>
           </div>
 
-          {properties.length === 0 ? (
+          {refreshing ? (
+            <div className={viewMode === 'grid' 
+              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+              : 'space-y-4'
+            }>
+              {Array.from({ length: viewMode === 'grid' ? 6 : 4 }).map((_, i) => (
+                viewMode === 'grid' ? (
+                  <ListingCardSkeleton key={i} />
+                ) : (
+                  <NBCard key={i} className="flex items-center justify-between p-4">
+                    <div className="flex items-center space-x-4">
+                      <Skeleton className="w-16 h-16 rounded" />
+                      <div>
+                        <Skeleton className="h-6 w-40 mb-2" />
+                        <Skeleton className="h-4 w-32 mb-1" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Skeleton className="h-6 w-16" />
+                      <Skeleton className="h-8 w-16" />
+                    </div>
+                  </NBCard>
+                )
+              ))}
+            </div>
+          ) : properties.length === 0 ? (
             <div className="text-center py-12">
               <Building className="w-16 h-16 text-nb-ink/30 mx-auto mb-4" />
               <h3 className="font-display font-bold text-lg text-nb-ink mb-2">
