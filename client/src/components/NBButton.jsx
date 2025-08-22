@@ -5,9 +5,10 @@
 import { cn } from '@/lib/utils';
 import { forwardRef } from 'react';
 import { cva } from 'class-variance-authority';
+import { motion } from 'framer-motion';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-nb text-sm font-medium transition-all duration-200 ease-out border-2 border-nb-ink shadow-nb hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-nb-accent disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-nb text-sm font-medium transition-all duration-200 ease-out border-2 border-nb-ink shadow-nb-sm hover:-translate-y-0.5 hover:shadow-[2px_2px_0_0_rgba(0,0,0,0.9)] active:translate-y-1 active:shadow-none focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-nb-accent disabled:pointer-events-none disabled:opacity-50 transform-gpu',
   {
     variants: {
       variant: {
@@ -48,14 +49,23 @@ const NBButton = forwardRef(({
   ...props 
 }, ref) => {
   return (
-    <button
+    <motion.button
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
+      whileHover={{ 
+        y: -2,
+        transition: { duration: 0.2, ease: "easeOut" }
+      }}
+      whileTap={{ 
+        y: 4,
+        scale: 0.98,
+        transition: { duration: 0.1, ease: "easeInOut" }
+      }}
       {...props}
     >
       {icon && <span className="mr-2">{icon}</span>}
       {children}
-    </button>
+    </motion.button>
   );
 });
 
