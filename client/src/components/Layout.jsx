@@ -273,7 +273,7 @@ export function Layout({ children }) {
       </main>
 
       {/* Footer */}
-      <footer className="bg-nb-card border-t-2 border-nb-ink mt-auto mt-10">
+      <footer className="bg-nb-card border-t-2 border-nb-ink mt-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
