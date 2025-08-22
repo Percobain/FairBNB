@@ -1,5 +1,5 @@
 /**
- * @fileoverview Property listing details page
+ * @fileoverview Property listing details page with blockchain integration
  */
 
 import { useState, useEffect } from 'react';
@@ -9,13 +9,12 @@ import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
 import { Gallery } from '@/components/Gallery';
 import { PricingWidget } from '@/components/PricingWidget';
-import { getById } from '@/lib/services/propertiesService';
-import { createBooking } from '@/lib/services/rentalsService';
+import { web3Service } from '@/lib/services/web3Service';
 import { useAppStore } from '@/lib/stores/useAppStore';
-import { MapPin, User, Calendar, Home, Wifi, Car, Shield, Star } from 'lucide-react';
+import { MapPin, User, Calendar, Home, Wifi, Car, Shield, Star, Building } from 'lucide-react';
 
 /**
- * Property listing details with booking functionality
+ * Property listing details with blockchain data
  */
 export function ListingDetails() {
   const { id } = useParams();
@@ -24,20 +23,114 @@ export function ListingDetails() {
   const [property, setProperty] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  const [rentalDetails, setRentalDetails] = useState(null);
+  const [listingDetails, setListingDetails] = useState(null);
+
+  // Helper function to convert IPFS URL to gateway URL
+  const getImageUrl = (ipfsUrl) => {
+    if (!ipfsUrl) return '/mock-images/placeholder-property.jpg';
+    
+    if (ipfsUrl.startsWith('ipfs://')) {
+      return ipfsUrl.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
+    }
+    
+    if (ipfsUrl.startsWith('https://')) {
+      return ipfsUrl;
+    }
+    
+    if (ipfsUrl.startsWith('Qm') || ipfsUrl.startsWith('bafy')) {
+      return `https://gateway.pinata.cloud/ipfs/${ipfsUrl}`;
+    }
+    
+    return '/mock-images/placeholder-property.jpg';
+  };
 
   useEffect(() => {
     const loadProperty = async () => {
       try {
-        const propertyData = getById(id);
-        if (!propertyData) {
-          toast.error('Property not found');
-          navigate('/tenant');
-          return;
+        setLoading(true);
+
+        // Check if Web3 is connected
+        if (!web3Service.isWeb3Connected()) {
+          const initResult = await web3Service.initialize();
+          if (!initResult.success) {
+            throw new Error(initResult.error);
+          }
         }
+
+        // Get token URI and metadata
+        const tokenURI = await web3Service.contract.tokenURI(id);
+        const metadataResult = await web3Service.getMetadataFromURI(tokenURI);
+        
+        if (!metadataResult.success) {
+          throw new Error('Failed to load property metadata');
+        }
+
+        const metadata = metadataResult.metadata;
+        const imageUrl = getImageUrl(metadata.image);
+
+        // Get listing details from contract
+        const listingResult = await web3Service.contract.getListingDetails(id);
+        const rentalResult = await web3Service.contract.getRentalDetails(id);
+        
+        // Get owner address
+        const owner = await web3Service.contract.ownerOf(id);
+
+        // Create mock photos array with the main image
+        const photos = [
+          imageUrl,
+          '/mock-images/property-2.jpg',
+          '/mock-images/property-3.jpg',
+          '/mock-images/property-4.jpg'
+        ];
+
+        // Mock amenities based on property type
+        const mockAmenities = {
+          'Apartment': ['Wi-Fi', 'AC', 'Kitchen', 'Security', 'Parking', 'Washer'],
+          'Studio': ['Wi-Fi', 'AC', 'Kitchen', 'Security'],
+          'PG': ['Wi-Fi', 'AC', 'Security', 'Food'],
+          'CoLiving': ['Wi-Fi', 'AC', 'Kitchen', 'Gym', 'Common Area', 'Security'],
+          'House': ['Wi-Fi', 'AC', 'Kitchen', 'Garden', 'Parking', 'Security']
+        };
+
+        const propertyData = {
+          id: id,
+          tokenId: id,
+          title: metadata.name,
+          description: metadata.description,
+          propertyType: metadata.propertyType,
+          address: metadata.address,
+          city: metadata.city,
+          state: metadata.state,
+          country: metadata.country,
+          pincode: metadata.pincode,
+          rentPerMonth: parseInt(listingResult.rent),
+          securityDeposit: parseInt(listingResult.deposit),
+          disputeFee: parseInt(listingResult.disputeFee),
+          availableFrom: metadata.availableFrom,
+          minDurationMonths: metadata.minDurationMonths,
+          maxDurationMonths: metadata.maxDurationMonths,
+          photos: photos,
+          coverImage: 0,
+          amenities: mockAmenities[metadata.propertyType] || ['Wi-Fi', 'AC', 'Kitchen'],
+          isListed: listingResult.isListed,
+          isRented: rentalResult.isActive,
+          isDisputed: rentalResult.isDisputed,
+          landlord: owner,
+          tenant: rentalResult.tenant,
+          createdAt: metadata.createdAt,
+          imageUrl: imageUrl,
+          metadata: metadata
+        };
+
         setProperty(propertyData);
+        setListingDetails(listingResult);
+        setRentalDetails(rentalResult);
+
       } catch (error) {
         console.error('Failed to load property:', error);
         toast.error('Failed to load property details');
+        navigate('/tenant');
       } finally {
         setLoading(false);
       }
@@ -48,21 +141,31 @@ export function ListingDetails() {
     }
   }, [id, navigate]);
 
-  const handleBooking = (bookingData) => {
+  const handleBooking = async (bookingData) => {
     try {
-      const rental = createBooking({
-        propertyId: property.id,
-        tenantId: currentUser.id,
-        durationMonths: bookingData.durationMonths,
-        startDate: new Date().toISOString()
+      if (!web3Service.isWeb3Connected()) {
+        const initResult = await web3Service.initialize();
+        if (!initResult.success) {
+          throw new Error(initResult.error);
+        }
+      }
+
+      // Calculate total amount to pay
+      const totalAmount = property.rentPerMonth + property.securityDeposit + property.disputeFee;
+
+      // Rent the property
+      const rentResult = await web3Service.rentProperty(property.tokenId, totalAmount);
+      
+      if (!rentResult.success) {
+        throw new Error(rentResult.error);
+      }
+
+      toast.success('Booking confirmed!', {
+        description: `Property rented successfully. Transaction: ${rentResult.txnHash.slice(0, 10)}...`
       });
 
-      toast.success('Booking confirmed! (Demo)', {
-        description: 'Funds locked in escrow. Rental agreement created.'
-      });
-
-      // Navigate to escrow page
-      navigate(`/tenant/escrow/${rental.id}`);
+      // Navigate to escrow page or refresh
+      window.location.reload();
     } catch (error) {
       console.error('Booking failed:', error);
       toast.error('Booking failed. Please try again.');
@@ -86,13 +189,15 @@ export function ListingDetails() {
     'Gym': Home,
     'Pool': Home,
     'Garden': Home,
-    'Balcony': Home
+    'Balcony': Home,
+    'Food': Home,
+    'Common Area': Home
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-nb-bg flex items-center justify-center">
-        <div className="text-nb-ink font-body">Loading property...</div>
+        <div className="text-nb-ink font-body">Loading property details...</div>
       </div>
     );
   }
@@ -129,6 +234,16 @@ export function ListingDetails() {
                 <span className="px-3 py-1 bg-nb-accent text-nb-ink text-sm rounded border border-nb-ink">
                   {property.propertyType}
                 </span>
+                {property.isListed && (
+                  <span className="px-3 py-1 bg-nb-warn text-nb-ink text-sm rounded border border-nb-ink">
+                    Available
+                  </span>
+                )}
+                {property.isRented && (
+                  <span className="px-3 py-1 bg-nb-error text-nb-ink text-sm rounded border border-nb-ink">
+                    Rented
+                  </span>
+                )}
                 <div className="flex items-center text-sm text-nb-ink/70">
                   <Star className="w-4 h-4 mr-1 fill-current text-nb-warn" />
                   4.8 (24 reviews)
@@ -152,10 +267,10 @@ export function ListingDetails() {
                 </div>
                 <div>
                   <h3 className="font-display font-bold text-lg text-nb-ink">
-                    Hosted by Demo Landlord
+                    Hosted by {property.landlord.slice(0, 6)}...{property.landlord.slice(-4)}
                   </h3>
                   <div className="flex items-center text-sm text-nb-ink/70">
-                    <span>Verified host • Joined 2023</span>
+                    <span>Verified host • Token ID: {property.tokenId}</span>
                   </div>
                 </div>
               </div>
@@ -202,6 +317,10 @@ export function ListingDetails() {
                       <div className="flex items-center space-x-2">
                         <User className="w-4 h-4 text-nb-ink/60" />
                         <span className="text-sm text-nb-ink">{property.minDurationMonths}-{property.maxDurationMonths} months</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Building className="w-4 h-4 text-nb-ink/60" />
+                        <span className="text-sm text-nb-ink">Created: {new Date(property.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </div>
@@ -254,7 +373,11 @@ export function ListingDetails() {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-nb-ink">Accepted Payment</span>
-                        <span className="font-medium text-nb-ink">BNB (Demo)</span>
+                        <span className="font-medium text-nb-ink">BNB</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-nb-ink">Total to Pay</span>
+                        <span className="font-medium text-nb-ink">₹{(property.rentPerMonth + property.securityDeposit + property.disputeFee).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
@@ -298,6 +421,7 @@ export function ListingDetails() {
               deposit={property.securityDeposit}
               disputeFee={property.disputeFee}
               onBook={handleBooking}
+              disabled={!property.isListed || property.isRented}
             />
           </div>
         </div>

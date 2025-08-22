@@ -1,32 +1,14 @@
 /**
- * @fileoverview Web3 service for blockchain interactions
+ * @fileoverview Web3 service for blockchain interactions with FairBNB contract
  */
 
 import { ethers } from 'ethers';
-import { greenfieldService } from './greenfieldService.js';
+import { FairBNB } from '../../abis/FairBNB.js';
 
-// Contract ABIs
-import { RentalNFTABI } from '../../abis/RentalNFT.js';
-import { EscrowABI } from '../../abis/IntegratedEscrow.js';
-
-// BNB Greenfield Configuration
-const GREENFIELD_CONFIG = {
-  rpcUrl: 'https://gnfd-testnet-fullnode-tendermint-us.bnbchain.org',
-  chainId: 'greenfield_5600-1',
-  spEndpoints: [
-    'https://gnfd-testnet-sp1.bnbchain.org',
-    'https://gnfd-testnet-sp2.bnbchain.org',
-    'https://gnfd-testnet-sp3.bnbchain.org',
-    'https://gnfd-testnet-sp4.bnbchain.org'
-  ],
-  bucketName: 'test-fairbnb',  // Updated to match greenfieldService
-  primarySPAddress: '0x5ccF0F6b78a37Ef4e2CcBC10D155c28Fb8bE9BaF'
-};
-
-// Contract addresses (update these after deployment)
-const CONTRACT_ADDRESSES = {
-  rentalNFT: '0x2FF6361D8221936a9ba365101A963154078C18C3',
-  integratedEscrow: '0xFC1b28D658F2B4db2Ef9A40fE18ac1419bdBe322'
+// Contract configuration
+const CONTRACT_CONFIG = {
+  address: '0x273806d29F1883b1AF5D51fFA6650c4adF26796c',
+  network: 'BSC Testnet'
 };
 
 class Web3Service {
@@ -34,8 +16,7 @@ class Web3Service {
     this.provider = null;
     this.signer = null;
     this.account = null;
-    this.rentalNFTContract = null;
-    this.escrowContract = null;
+    this.contract = null;
     this.isConnected = false;
   }
 
@@ -57,19 +38,10 @@ class Web3Service {
       this.provider = new ethers.BrowserProvider(window.ethereum);
       this.signer = await this.provider.getSigner();
 
-      // Initialize Greenfield service
-      greenfieldService.initialize(this.account, this.signer);
-
-      // Initialize contracts
-      this.rentalNFTContract = new ethers.Contract(
-        CONTRACT_ADDRESSES.rentalNFT,
-        RentalNFTABI,
-        this.signer
-      );
-
-      this.escrowContract = new ethers.Contract(
-        CONTRACT_ADDRESSES.integratedEscrow,
-        EscrowABI,
+      // Initialize FairBNB contract
+      this.contract = new ethers.Contract(
+        CONTRACT_CONFIG.address,
+        FairBNB,
         this.signer
       );
 
@@ -102,7 +74,6 @@ class Web3Service {
     } else if (accounts[0] !== this.account) {
       this.account = accounts[0];
       this.signer = this.provider.getSigner();
-      greenfieldService.initialize(this.account, this.signer);
     }
   }
 
@@ -120,8 +91,7 @@ class Web3Service {
     this.provider = null;
     this.signer = null;
     this.account = null;
-    this.rentalNFTContract = null;
-    this.escrowContract = null;
+    this.contract = null;
     this.isConnected = false;
   }
 
@@ -140,34 +110,33 @@ class Web3Service {
   }
 
   /**
-   * Upload file to BNB Greenfield
+   * Upload file to IPFS using Pinata
    */
-  async uploadToGreenfield(file, path) {
+  async uploadToIPFS(file) {
     try {
-      // Ensure bucket exists
-      const bucketResult = await greenfieldService.ensureBucketExists();
-      if (!bucketResult.success) {
-        throw new Error(`Failed to ensure bucket exists: ${bucketResult.error}`);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_PINATA_JWT}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to upload to IPFS: ${response.statusText}`);
       }
 
-      // Upload file
-      const uploadResult = await greenfieldService.uploadObject(
-        GREENFIELD_CONFIG.bucketName,
-        path,
-        file
-      );
-
-      if (!uploadResult.success) {
-        throw new Error(`Failed to upload file: ${uploadResult.error}`);
-      }
-
+      const result = await response.json();
       return {
         success: true,
-        url: uploadResult.url,
-        publicUrl: greenfieldService.getPublicUrl(GREENFIELD_CONFIG.bucketName, path)
+        hash: result.IpfsHash,
+        url: `ipfs://${result.IpfsHash}`
       };
     } catch (error) {
-      console.error('Failed to upload to Greenfield:', error);
+      console.error('Failed to upload to IPFS:', error);
       return {
         success: false,
         error: error.message
@@ -176,50 +145,93 @@ class Web3Service {
   }
 
   /**
-   * Upload metadata to BNB Greenfield
+   * Upload metadata to IPFS
    */
-  async uploadMetadata(metadata, tokenId) {
+  async uploadMetadata(metadata) {
     try {
-      return await greenfieldService.uploadMetadata(metadata, tokenId);
-    } catch (error) {
-      console.error('Failed to upload metadata:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
+      const metadataBlob = new Blob([JSON.stringify(metadata)], {
+        type: 'application/json'
+      });
 
-  /**
-   * Mint a new rental NFT
-   */
-  async mintRentalNFT(metadata) {
-    try {
-      if (!this.rentalNFTContract) {
-        throw new Error('RentalNFT contract not initialized');
+      const formData = new FormData();
+      formData.append('file', metadataBlob, 'metadata.json');
+
+      const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_PINATA_JWT}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to upload metadata to IPFS: ${response.statusText}`);
       }
 
-      // Generate token ID
-      const tokenId = await this.rentalNFTContract.getCurrentTokenId();
-      
-      // Upload metadata to Greenfield
-      const metadataResult = await this.uploadMetadata(metadata, tokenId.toString());
+      const result = await response.json();
+      return {
+        success: true,
+        hash: result.IpfsHash,
+        url: `ipfs://${result.IpfsHash}`
+      };
+    } catch (error) {
+      console.error('Failed to upload metadata to IPFS:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Mint a new property NFT
+   */
+  async mintProperty(metadata, imageFile) {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      // Upload image to IPFS first
+      const imageResult = await this.uploadToIPFS(imageFile);
+      if (!imageResult.success) {
+        throw new Error(`Failed to upload image: ${imageResult.error}`);
+      }
+
+      // Create metadata with image URI
+      const propertyMetadata = {
+        ...metadata,
+        image: imageResult.url,
+        attributes: [
+          {
+            trait_type: "Property Type",
+            value: metadata.propertyType
+          },
+          {
+            trait_type: "City",
+            value: metadata.city
+          },
+          {
+            trait_type: "State",
+            value: metadata.state
+          }
+        ]
+      };
+
+      // Upload metadata to IPFS
+      const metadataResult = await this.uploadMetadata(propertyMetadata);
       if (!metadataResult.success) {
         throw new Error(`Failed to upload metadata: ${metadataResult.error}`);
       }
 
-      // Mint NFT with the metadata URI
-      const tx = await this.rentalNFTContract.mint(
-        this.account,
-        metadataResult.url
-      );
-
+      // Mint NFT with metadata URI
+      const tx = await this.contract.mintProperty(metadataResult.url);
       const receipt = await tx.wait();
-      
-      // Find the mint event
+
+      // Find the PropertyMinted event
       const mintEvent = receipt.logs.find(log => {
         try {
-          const parsed = this.rentalNFTContract.interface.parseLog(log);
+          const parsed = this.contract.interface.parseLog(log);
           return parsed.name === 'PropertyMinted';
         } catch {
           return false;
@@ -227,19 +239,20 @@ class Web3Service {
       });
 
       if (mintEvent) {
-        const parsed = this.rentalNFTContract.interface.parseLog(mintEvent);
+        const parsed = this.contract.interface.parseLog(mintEvent);
         return {
           success: true,
           tokenId: parsed.args.tokenId.toString(),
-          tokenURI: parsed.args.tokenURI,
+          tokenURI: parsed.args.uri,
           txnHash: receipt.hash,
-          metadataUrl: metadataResult.url
+          metadataUrl: metadataResult.url,
+          imageUrl: imageResult.url
         };
       }
 
       throw new Error('Mint event not found');
     } catch (error) {
-      console.error('Failed to mint NFT:', error);
+      console.error('Failed to mint property:', error);
       return {
         success: false,
         error: error.message
@@ -248,44 +261,42 @@ class Web3Service {
   }
 
   /**
-   * Create a rental agreement
+   * List property for rent
    */
-  async createRentalAgreement(params) {
+  async listProperty(tokenId, rent, deposit, disputeFee) {
     try {
-      if (!this.escrowContract) {
-        throw new Error('Escrow contract not initialized');
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
       }
 
-      const totalAmount = params.rentAmount + params.depositAmount + params.disputeFee;
-
-      const tx = await this.escrowContract.createAgreement(params, {
-        value: totalAmount
-      });
-
+      const tx = await this.contract.listProperty(tokenId, rent, deposit, disputeFee);
       const receipt = await tx.wait();
-      
-      // Find the agreement created event
-      const agreementEvent = receipt.logs.find(log => {
+
+      // Find the PropertyListed event
+      const listEvent = receipt.logs.find(log => {
         try {
-          const parsed = this.escrowContract.interface.parseLog(log);
-          return parsed.name === 'AgreementCreated';
+          const parsed = this.contract.interface.parseLog(log);
+          return parsed.name === 'PropertyListed';
         } catch {
           return false;
         }
       });
 
-      if (agreementEvent) {
-        const parsed = this.escrowContract.interface.parseLog(agreementEvent);
+      if (listEvent) {
+        const parsed = this.contract.interface.parseLog(listEvent);
         return {
           success: true,
-          agreementId: parsed.args.agreementId.toString(),
+          tokenId: parsed.args.tokenId.toString(),
+          rent: parsed.args.rent.toString(),
+          deposit: parsed.args.deposit.toString(),
+          disputeFee: parsed.args.disputeFee.toString(),
           txnHash: receipt.hash
         };
       }
 
-      throw new Error('Agreement event not found');
+      throw new Error('List event not found');
     } catch (error) {
-      console.error('Failed to create rental agreement:', error);
+      console.error('Failed to list property:', error);
       return {
         success: false,
         error: error.message
@@ -294,31 +305,53 @@ class Web3Service {
   }
 
   /**
-   * Get user's rental NFTs
+   * Get user's NFTs (properties owned by connected address)
    */
   async getUserNFTs() {
     try {
-      if (!this.rentalNFTContract) {
-        throw new Error('RentalNFT contract not initialized');
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
       }
 
-      // Get balance
-      const balance = await this.rentalNFTContract.balanceOf(this.account);
+      const userTokens = await this.contract.getUserTokens(this.account);
       const nfts = [];
 
-      // Get all tokens owned by user
-      for (let i = 0; i < balance; i++) {
-        const tokenId = await this.rentalNFTContract.tokenOfOwnerByIndex(this.account, i);
-        const tokenURI = await this.rentalNFTContract.tokenURI(tokenId);
-        
-        // Fetch metadata from Greenfield
-        const metadataResult = await this.getMetadataFromURI(tokenURI);
-        
-        nfts.push({
-          tokenId: tokenId.toString(),
-          tokenURI,
-          metadata: metadataResult.success ? metadataResult.metadata : null
-        });
+      for (const tokenId of userTokens) {
+        try {
+          const tokenURI = await this.contract.tokenURI(tokenId);
+          const owner = await this.contract.ownerOf(tokenId);
+          
+          // Get listing details
+          const listingDetails = await this.contract.getListingDetails(tokenId);
+          
+          // Get rental details if exists
+          const rentalDetails = await this.contract.getRentalDetails(tokenId);
+
+          nfts.push({
+            tokenId: tokenId.toString(),
+            tokenURI,
+            owner,
+            listing: {
+              rent: listingDetails.rent.toString(),
+              deposit: listingDetails.deposit.toString(),
+              disputeFee: listingDetails.disputeFee.toString(),
+              isListed: listingDetails.isListed
+            },
+            rental: {
+              landlord: rentalDetails.landlord,
+              tenant: rentalDetails.tenant,
+              rent: rentalDetails.rent.toString(),
+              deposit: rentalDetails.deposit.toString(),
+              disputeFee: rentalDetails.disputeFee.toString(),
+              isActive: rentalDetails.isActive,
+              tenantHappy: rentalDetails.tenantHappy,
+              landlordHappy: rentalDetails.landlordHappy,
+              isDisputed: rentalDetails.isDisputed
+            }
+          });
+        } catch (error) {
+          console.error(`Failed to get details for token ${tokenId}:`, error);
+        }
       }
 
       return {
@@ -335,102 +368,42 @@ class Web3Service {
   }
 
   /**
-   * Get user's rental agreements
+   * Get all available listings
    */
-  async getUserAgreements() {
+  async getAvailableListings() {
     try {
-      if (!this.escrowContract) {
-        throw new Error('Escrow contract not initialized');
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
       }
 
-      const tenantAgreements = await this.escrowContract.getTenantAgreements(this.account);
-      const landlordAgreements = await this.escrowContract.getLandlordAgreements(this.account);
+      const result = await this.contract.getAvailableListings();
+      const listings = [];
 
-      const agreements = [];
+      for (let i = 0; i < result.availableTokenIds.length; i++) {
+        try {
+          const tokenId = result.availableTokenIds[i];
+          const tokenURI = await this.contract.tokenURI(tokenId);
+          const owner = await this.contract.ownerOf(tokenId);
 
-      // Get tenant agreements
-      for (const agreementId of tenantAgreements) {
-        const agreement = await this.escrowContract.getAgreementDetails(agreementId);
-        agreements.push({
-          id: agreementId.toString(),
-          ...agreement,
-          role: 'tenant'
-        });
-      }
-
-      // Get landlord agreements
-      for (const agreementId of landlordAgreements) {
-        const agreement = await this.escrowContract.getAgreementDetails(agreementId);
-        agreements.push({
-          id: agreementId.toString(),
-          ...agreement,
-          role: 'landlord'
-        });
-      }
-
-      return {
-        success: true,
-        agreements
-      };
-    } catch (error) {
-      console.error('Failed to get user agreements:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Stake as juror
-   */
-  async stakeAsJuror(amount) {
-    try {
-      if (!this.escrowContract) {
-        throw new Error('Escrow contract not initialized');
-      }
-
-      const tx = await this.escrowContract.stakeAsJuror({
-        value: amount
-      });
-
-      const receipt = await tx.wait();
-      return {
-        success: true,
-        txnHash: receipt.hash
-      };
-    } catch (error) {
-      console.error('Failed to stake as juror:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Get juror statistics
-   */
-  async getJurorStats() {
-    try {
-      if (!this.escrowContract) {
-        throw new Error('Escrow contract not initialized');
-      }
-
-      const stats = await this.escrowContract.getJurorStats(this.account);
-      return {
-        success: true,
-        stats: {
-          stakedAmount: stats.stakedAmount.toString(),
-          disputesAssigned: stats.disputesAssigned.toString(),
-          disputesVoted: stats.disputesVoted.toString(),
-          correctVotes: stats.correctVotes.toString(),
-          totalEarned: stats.totalEarned.toString(),
-          isActive: stats.isActive
+          listings.push({
+            tokenId: tokenId.toString(),
+            tokenURI,
+            landlord: result.landlords[i],
+            rent: result.rents[i].toString(),
+            deposit: result.deposits[i].toString(),
+            disputeFee: result.disputeFees[i].toString()
+          });
+        } catch (error) {
+          console.error(`Failed to get details for listing ${i}:`, error);
         }
+      }
+
+      return {
+        success: true,
+        listings
       };
     } catch (error) {
-      console.error('Failed to get juror stats:', error);
+      console.error('Failed to get available listings:', error);
       return {
         success: false,
         error: error.message
@@ -439,29 +412,209 @@ class Web3Service {
   }
 
   /**
-   * Get metadata from Greenfield URI
+   * Get all NFTs with details (for explore page)
+   */
+  async getAllNFTsWithDetails() {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const result = await this.contract.getAllNFTsWithDetails();
+      const nfts = [];
+
+      for (let i = 0; i < result.tokenIds.length; i++) {
+        try {
+          nfts.push({
+            tokenId: result.tokenIds[i].toString(),
+            owner: result.owners[i],
+            tokenURI: result.uris[i],
+            isListed: result.isListed[i],
+            rent: result.rents[i].toString(),
+            deposit: result.deposits[i].toString(),
+            isRented: result.isRented[i]
+          });
+        } catch (error) {
+          console.error(`Failed to get details for NFT ${i}:`, error);
+        }
+      }
+
+      return {
+        success: true,
+        nfts
+      };
+    } catch (error) {
+      console.error('Failed to get all NFTs:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Get metadata from IPFS URI
    */
   async getMetadataFromURI(tokenURI) {
     try {
-      // Extract object path from greenfield:// URL
-      const urlParts = tokenURI.replace('greenfield://', '').split('/');
-      const bucketName = urlParts[0];
-      const objectName = urlParts.slice(1).join('/');
-
-      const result = await greenfieldService.getObject(bucketName, objectName);
-      if (!result.success) {
-        throw new Error(`Failed to fetch metadata: ${result.error}`);
+      // Convert ipfs:// to https://gateway.pinata.cloud/ipfs/
+      const gatewayUrl = tokenURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
+      
+      const response = await fetch(gatewayUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch metadata: ${response.statusText}`);
       }
 
-      const metadataText = await result.data.text();
-      const metadata = JSON.parse(metadataText);
-
+      const metadata = await response.json();
       return {
         success: true,
         metadata
       };
     } catch (error) {
       console.error('Failed to get metadata from URI:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Rent a property
+   */
+  async rentProperty(tokenId, totalAmount) {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const tx = await this.contract.rentProperty(tokenId, { value: totalAmount });
+      const receipt = await tx.wait();
+
+      // Find the PropertyRented event
+      const rentEvent = receipt.logs.find(log => {
+        try {
+          const parsed = this.contract.interface.parseLog(log);
+          return parsed.name === 'PropertyRented';
+        } catch {
+          return false;
+        }
+      });
+
+      if (rentEvent) {
+        const parsed = this.contract.interface.parseLog(rentEvent);
+        return {
+          success: true,
+          tokenId: parsed.args.tokenId.toString(),
+          tenant: parsed.args.tenant,
+          totalPaid: parsed.args.totalPaid.toString(),
+          txnHash: receipt.hash
+        };
+      }
+
+      throw new Error('Rent event not found');
+    } catch (error) {
+      console.error('Failed to rent property:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Confirm happy (either party)
+   */
+  async confirmHappy(tokenId, isLandlord) {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const tx = await this.contract.confirmHappy(tokenId, isLandlord);
+      const receipt = await tx.wait();
+
+      return {
+        success: true,
+        txnHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Failed to confirm happy:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Raise dispute
+   */
+  async raiseDispute(tokenId) {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const tx = await this.contract.raiseDispute(tokenId);
+      const receipt = await tx.wait();
+
+      return {
+        success: true,
+        txnHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Failed to raise dispute:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Resolve dispute (jury function)
+   */
+  async resolveDispute(tokenId, tenantWins) {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const tx = await this.contract.resolveDispute(tokenId, tenantWins);
+      const receipt = await tx.wait();
+
+      return {
+        success: true,
+        txnHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Failed to resolve dispute:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Withdraw accumulated funds
+   */
+  async withdraw() {
+    try {
+      if (!this.contract) {
+        throw new Error('FairBNB contract not initialized');
+      }
+
+      const tx = await this.contract.withdraw();
+      const receipt = await tx.wait();
+
+      return {
+        success: true,
+        txnHash: receipt.hash
+      };
+    } catch (error) {
+      console.error('Failed to withdraw:', error);
       return {
         success: false,
         error: error.message

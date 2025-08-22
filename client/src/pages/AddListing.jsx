@@ -1,5 +1,5 @@
 /**
- * @fileoverview Add new listing page
+ * @fileoverview Add new listing page with FairBNB contract integration
  */
 
 import { useState } from 'react';
@@ -10,8 +10,8 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
-import { create } from '@/lib/services/propertiesService';
-import { ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { web3Service } from '@/lib/services/web3Service';
+import { ChevronLeft, ChevronRight, Upload, X } from 'lucide-react';
 
 const listingSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -31,12 +31,14 @@ const listingSchema = z.object({
 });
 
 /**
- * Multi-step form for adding new property listing
+ * Multi-step form for adding new property listing with blockchain integration
  */
 export function AddListing() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
-  const [photos, setPhotos] = useState([]);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(listingSchema),
@@ -52,7 +54,7 @@ export function AddListing() {
   const steps = [
     { title: 'Basics', description: 'Property details and location' },
     { title: 'Pricing', description: 'Rent and deposit information' },
-    { title: 'Media', description: 'Photos and images' },
+    { title: 'Media', description: 'Property image' },
     { title: 'Availability', description: 'Duration and availability' },
     { title: 'Review', description: 'Review and create listing' }
   ];
@@ -65,23 +67,82 @@ export function AddListing() {
     setValue('securityDeposit', Number(value) * 2);
   };
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
+    if (!selectedImage) {
+      toast.error('Please select a property image');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setUploadProgress(0);
+    
     try {
-      const newListing = create({
-        ...data,
-        photos: photos.length > 0 ? photos : ['/mock-images/property-1.jpg'],
-        coverImage: 0,
-        amenities: ['Wi-Fi', 'AC', 'Kitchen'] // Mock amenities
-      });
+      // Check if Web3 is connected
+      if (!web3Service.isWeb3Connected()) {
+        const initResult = await web3Service.initialize();
+        if (!initResult.success) {
+          throw new Error(initResult.error);
+        }
+      }
+
+      setUploadProgress(10);
+
+      // Create metadata object
+      const metadata = {
+        name: data.title,
+        description: data.description,
+        propertyType: data.propertyType,
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        country: data.country,
+        pincode: data.pincode,
+        rentPerMonth: data.rentPerMonth,
+        securityDeposit: data.securityDeposit,
+        disputeFee: data.disputeFee,
+        availableFrom: data.availableFrom,
+        minDurationMonths: data.minDurationMonths,
+        maxDurationMonths: data.maxDurationMonths,
+        createdAt: new Date().toISOString()
+      };
+
+      setUploadProgress(20);
+
+      // Mint NFT with metadata and image
+      const mintResult = await web3Service.mintProperty(metadata, selectedImage);
+      if (!mintResult.success) {
+        throw new Error(mintResult.error);
+      }
+
+      setUploadProgress(80);
+
+      // List the property for rent
+      const listResult = await web3Service.listProperty(
+        mintResult.tokenId,
+        data.rentPerMonth,
+        data.securityDeposit,
+        data.disputeFee
+      );
+
+      if (!listResult.success) {
+        throw new Error(listResult.error);
+      }
+
+      setUploadProgress(100);
 
       toast.success('Listing created successfully!', {
-        description: 'Your property is now live on FairBNB'
+        description: `Property NFT minted with ID: ${mintResult.tokenId}`
       });
 
       navigate('/landlord');
     } catch (error) {
       console.error('Failed to create listing:', error);
-      toast.error('Failed to create listing. Please try again.');
+      toast.error('Failed to create listing', {
+        description: error.message
+      });
+    } finally {
+      setIsSubmitting(false);
+      setUploadProgress(0);
     }
   };
 
@@ -97,15 +158,33 @@ export function AddListing() {
     }
   };
 
-  const handlePhotoUpload = () => {
-    // Mock photo upload
-    const mockPhotos = [
-      '/mock-images/property-1.jpg',
-      '/mock-images/property-2.jpg',
-      '/mock-images/property-3.jpg'
-    ];
-    setPhotos(mockPhotos);
-    toast.success('Photos uploaded (demo)');
+  const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select a valid image file');
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image size should be less than 10MB');
+        return;
+      }
+
+      setSelectedImage(file);
+      toast.success('Image selected successfully');
+    }
+  };
+
+  const removeSelectedImage = () => {
+    setSelectedImage(null);
+    // Reset the file input
+    const fileInput = document.getElementById('image-upload');
+    if (fileInput) {
+      fileInput.value = '';
+    }
   };
 
   return (
@@ -124,7 +203,7 @@ export function AddListing() {
             Add New Listing
           </h1>
           <p className="font-body text-nb-ink/70">
-            Create a new property listing to start earning rental income
+            Create a new property listing on the blockchain
           </p>
         </div>
 
@@ -339,9 +418,9 @@ export function AddListing() {
                 </div>
 
                 <div className="bg-nb-accent/20 border-2 border-nb-accent rounded-nb p-4">
-                  <h3 className="font-medium text-nb-ink mb-2">Payment Information</h3>
+                  <h3 className="font-medium text-nb-ink mb-2">Blockchain Information</h3>
                   <p className="text-sm text-nb-ink/70">
-                    Payments will be accepted in BNB (demo). All funds are held in escrow until rental completion.
+                    Your property will be minted as an NFT on BSC Testnet. All payments will be handled in BNB through smart contract escrow.
                   </p>
                 </div>
               </div>
@@ -350,38 +429,55 @@ export function AddListing() {
             {currentStep === 2 && (
               <div className="space-y-6">
                 <h2 className="font-display font-bold text-xl text-nb-ink mb-4">
-                  Property Photos
+                  Property Image
                 </h2>
                 
-                <div className="border-2 border-dashed border-nb-ink rounded-nb p-8 text-center">
-                  <Upload className="w-12 h-12 text-nb-ink/40 mx-auto mb-4" />
-                  <h3 className="font-medium text-nb-ink mb-2">Upload Photos</h3>
-                  <p className="text-sm text-nb-ink/70 mb-4">
-                    Add photos to showcase your property (demo)
-                  </p>
-                  <NBButton type="button" onClick={handlePhotoUpload}>
-                    Upload Photos (Demo)
-                  </NBButton>
-                </div>
-
-                {photos.length > 0 && (
+                {!selectedImage ? (
+                  <div className="border-2 border-dashed border-nb-ink rounded-nb p-8 text-center">
+                    <Upload className="w-12 h-12 text-nb-ink/40 mx-auto mb-4" />
+                    <h3 className="font-medium text-nb-ink mb-2">Upload Property Image</h3>
+                    <p className="text-sm text-nb-ink/70 mb-4">
+                      Select a high-quality image of your property (will be stored on IPFS)
+                    </p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                      id="image-upload"
+                    />
+                    <label htmlFor="image-upload" className="cursor-pointer">
+                      <div className="inline-flex items-center px-4 py-2 bg-nb-accent text-nb-ink font-medium rounded-nb border-2 border-nb-ink hover:bg-nb-accent/80 transition-colors">
+                        <Upload className="w-4 h-4 mr-2" />
+                        Select Image
+                      </div>
+                    </label>
+                    <p className="text-xs text-nb-ink/60 mt-2">
+                      Supported formats: JPG, PNG, GIF (Max 10MB)
+                    </p>
+                  </div>
+                ) : (
                   <div>
-                    <h3 className="font-medium text-nb-ink mb-4">Uploaded Photos</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {photos.map((photo, index) => (
-                        <div key={index} className="relative">
-                          <img
-                            src={photo}
-                            alt={`Property ${index + 1}`}
-                            className="w-full h-32 object-cover rounded border-2 border-nb-ink"
-                          />
-                          {index === 0 && (
-                            <span className="absolute top-2 left-2 bg-nb-accent text-nb-ink text-xs px-2 py-1 rounded border border-nb-ink">
-                              Cover
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                    <h3 className="font-medium text-nb-ink mb-4">Selected Image</h3>
+                    <div className="relative">
+                      <img
+                        src={URL.createObjectURL(selectedImage)}
+                        alt="Property preview"
+                        className="w-full h-64 object-cover rounded border-2 border-nb-ink"
+                      />
+                      <div className="absolute top-2 left-2 bg-nb-accent text-nb-ink text-xs px-2 py-1 rounded border border-nb-ink">
+                        {selectedImage.name}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={removeSelectedImage}
+                        className="absolute top-2 right-2 bg-nb-error text-nb-ink p-1 rounded-full hover:bg-nb-error/80 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="mt-2 text-sm text-nb-ink/70">
+                      File size: {(selectedImage.size / 1024 / 1024).toFixed(2)} MB
                     </div>
                   </div>
                 )}
@@ -451,9 +547,9 @@ export function AddListing() {
                 </h2>
                 
                 <div className="bg-nb-warn/20 border-2 border-nb-warn rounded-nb p-4">
-                  <h3 className="font-medium text-nb-ink mb-2">Ready to publish?</h3>
+                  <h3 className="font-medium text-nb-ink mb-2">Ready to mint NFT?</h3>
                   <p className="text-sm text-nb-ink/70">
-                    Review your listing details and click "Create Listing" to make it live on FairBNB.
+                    Your property will be minted as an NFT on the blockchain and listed for rent. This action cannot be undone.
                   </p>
                 </div>
 
@@ -479,7 +575,35 @@ export function AddListing() {
                       {watch('minDurationMonths')}-{watch('maxDurationMonths')} months
                     </p>
                   </div>
+
+                  {selectedImage && (
+                    <div>
+                      <h3 className="font-medium text-nb-ink">Image</h3>
+                      <p className="text-sm text-nb-ink/70">
+                        {selectedImage.name} ({(selectedImage.size / 1024 / 1024).toFixed(2)} MB)
+                      </p>
+                    </div>
+                  )}
                 </div>
+
+                {/* Upload Progress */}
+                {isSubmitting && (
+                  <div className="bg-nb-accent/20 border-2 border-nb-accent rounded-nb p-4">
+                    <h3 className="font-medium text-nb-ink mb-2">Creating Listing...</h3>
+                    <div className="w-full bg-nb-bg rounded-full h-2 border border-nb-ink">
+                      <div 
+                        className="bg-nb-accent h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-sm text-nb-ink/70 mt-2">
+                      {uploadProgress < 20 && 'Initializing...'}
+                      {uploadProgress >= 20 && uploadProgress < 80 && 'Uploading to IPFS...'}
+                      {uploadProgress >= 80 && uploadProgress < 100 && 'Minting NFT...'}
+                      {uploadProgress === 100 && 'Listing property...'}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </NBCard>
@@ -505,8 +629,12 @@ export function AddListing() {
                 Next
               </NBButton>
             ) : (
-              <NBButton type="submit" data-testid="create-listing">
-                Create Listing
+              <NBButton 
+                type="submit" 
+                disabled={isSubmitting || !selectedImage}
+                data-testid="create-listing"
+              >
+                {isSubmitting ? 'Creating...' : 'Create Listing'}
               </NBButton>
             )}
           </div>
