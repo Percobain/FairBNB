@@ -2,7 +2,7 @@
  * @fileoverview Add new listing page
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,8 +10,12 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
+import { GreenfieldStatus } from '@/components/GreenfieldStatus';
 import { create } from '@/lib/services/propertiesService';
-import { ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { greenfieldService } from '@/lib/services/greenfieldService';
+import { simpleGreenfieldService } from '@/lib/services/greenfieldServiceSimple';
+import { useWallet } from '@/lib/hooks/useWallet';
+import { ChevronLeft, ChevronRight, Upload, Wallet, Database } from 'lucide-react';
 
 const listingSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -37,6 +41,11 @@ export function AddListing() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [photos, setPhotos] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [greenfieldResult, setGreenfieldResult] = useState(null);
+  
+  // Wallet integration
+  const { address, provider, isConnected, isConnecting, connectWallet } = useWallet();
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(listingSchema),
@@ -50,12 +59,38 @@ export function AddListing() {
   });
 
   const steps = [
+    { title: 'Wallet', description: 'Connect your wallet' },
     { title: 'Basics', description: 'Property details and location' },
     { title: 'Pricing', description: 'Rent and deposit information' },
     { title: 'Media', description: 'Photos and images' },
     { title: 'Availability', description: 'Duration and availability' },
     { title: 'Review', description: 'Review and create listing' }
   ];
+
+  // Initialize Greenfield service when wallet connects
+  useEffect(() => {
+    const initializeGreenfield = async () => {
+      if (isConnected && address && provider) {
+        try {
+          // Try the full SDK first, fallback to simple service
+          try {
+            await greenfieldService.initialize(address, provider);
+            console.log('Full Greenfield service initialized');
+          } catch (sdkError) {
+            console.warn('SDK failed, using simple service:', sdkError);
+            await simpleGreenfieldService.initialize(address, provider);
+            console.log('Simple Greenfield service initialized (fallback)');
+            toast.warning('Using simplified Greenfield mode due to browser compatibility');
+          }
+        } catch (error) {
+          console.error('Failed to initialize any Greenfield service:', error);
+          toast.error('Failed to connect to BNB Greenfield. Please try again.');
+        }
+      }
+    };
+
+    initializeGreenfield();
+  }, [isConnected, address, provider]);
 
   const rentPerMonth = watch('rentPerMonth');
 
@@ -65,27 +100,70 @@ export function AddListing() {
     setValue('securityDeposit', Number(value) * 2);
   };
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
+    if (!isConnected) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    setIsUploading(true);
+    
     try {
-      const newListing = create({
+      // Prepare listing data for Greenfield
+      const listingData = {
         ...data,
         photos: photos.length > 0 ? photos : ['/mock-images/property-1.jpg'],
         coverImage: 0,
         amenities: ['Wi-Fi', 'AC', 'Kitchen'] // Mock amenities
+      };
+
+      // Upload metadata to BNB Greenfield
+      toast.loading('Uploading metadata to BNB Greenfield...', { id: 'upload' });
+      
+      // Try full service first, fallback to simple service
+      let greenfieldResult;
+      try {
+        greenfieldResult = await greenfieldService.uploadListingMetadata(listingData);
+      } catch (sdkError) {
+        console.warn('Full SDK upload failed, using simple service:', sdkError);
+        greenfieldResult = await simpleGreenfieldService.uploadListingMetadata(listingData);
+      }
+      
+      if (!greenfieldResult.success) {
+        throw new Error(greenfieldResult.error || 'Failed to upload to Greenfield');
+      }
+
+      setGreenfieldResult(greenfieldResult);
+      
+      // Create listing with Greenfield metadata URL
+      const newListing = create({
+        ...listingData,
+        greenfieldMetadataUrl: greenfieldResult.metadataUrl,
+        greenfieldListingId: greenfieldResult.listingId,
+        blockchainOwner: address
       });
 
       toast.success('Listing created successfully!', {
-        description: 'Your property is now live on FairBNB'
+        id: 'upload',
+        description: `Your property metadata is stored on BNB Greenfield (${greenfieldResult.listingId})`
       });
 
       navigate('/landlord');
     } catch (error) {
       console.error('Failed to create listing:', error);
-      toast.error('Failed to create listing. Please try again.');
+      toast.error(error.message || 'Failed to create listing. Please try again.', { id: 'upload' });
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const nextStep = () => {
+    // Don't allow progressing past wallet step if not connected
+    if (currentStep === 0 && !isConnected) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+    
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     }
@@ -154,6 +232,56 @@ export function AddListing() {
         <form onSubmit={handleSubmit(onSubmit)}>
           <NBCard className="mb-8">
             {currentStep === 0 && (
+              <div className="space-y-6">
+                <h2 className="font-display font-bold text-xl text-nb-ink mb-4">
+                  Connect Your Wallet
+                </h2>
+                
+                <div className="text-center py-8">
+                  <Wallet className="w-16 h-16 text-nb-ink/40 mx-auto mb-4" />
+                  
+                  {!isConnected ? (
+                    <div>
+                      <p className="text-nb-ink/70 mb-6">
+                        Connect your wallet to store listing metadata on BNB Greenfield
+                      </p>
+                      <NBButton
+                        type="button"
+                        onClick={connectWallet}
+                        disabled={isConnecting}
+                        className="mx-auto"
+                      >
+                        {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                      </NBButton>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="bg-nb-accent/20 border-2 border-nb-accent rounded-nb p-4 mb-4">
+                        <h3 className="font-medium text-nb-ink mb-2">✅ Wallet Connected</h3>
+                        <p className="text-sm text-nb-ink/70 break-all">
+                          {address}
+                        </p>
+                      </div>
+                      
+                      <div className="bg-blue-100 border-2 border-blue-300 rounded-nb p-4 mb-4">
+                        <div className="flex items-center justify-center mb-2">
+                          <Database className="w-5 h-5 text-blue-600 mr-2" />
+                          <h3 className="font-medium text-blue-900">BNB Greenfield Ready</h3>
+                        </div>
+                        <p className="text-sm text-blue-700">
+                          Your listing metadata will be stored on BNB Greenfield for decentralized access
+                        </p>
+                      </div>
+                      
+                      {/* Greenfield Status Component */}
+                      <GreenfieldStatus />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 1 && (
               <div className="space-y-6">
                 <h2 className="font-display font-bold text-xl text-nb-ink mb-4">
                   Property Basics
@@ -278,7 +406,7 @@ export function AddListing() {
               </div>
             )}
 
-            {currentStep === 1 && (
+            {currentStep === 2 && (
               <div className="space-y-6">
                 <h2 className="font-display font-bold text-xl text-nb-ink mb-4">
                   Pricing Information
@@ -347,7 +475,7 @@ export function AddListing() {
               </div>
             )}
 
-            {currentStep === 2 && (
+            {currentStep === 3 && (
               <div className="space-y-6">
                 <h2 className="font-display font-bold text-xl text-nb-ink mb-4">
                   Property Photos
@@ -388,7 +516,7 @@ export function AddListing() {
               </div>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <div className="space-y-6">
                 <h2 className="font-display font-bold text-xl text-nb-ink mb-4">
                   Availability & Duration
@@ -444,7 +572,7 @@ export function AddListing() {
               </div>
             )}
 
-            {currentStep === 4 && (
+            {currentStep === 5 && (
               <div className="space-y-6">
                 <h2 className="font-display font-bold text-xl text-nb-ink mb-4">
                   Review & Create Listing
@@ -453,11 +581,21 @@ export function AddListing() {
                 <div className="bg-nb-warn/20 border-2 border-nb-warn rounded-nb p-4">
                   <h3 className="font-medium text-nb-ink mb-2">Ready to publish?</h3>
                   <p className="text-sm text-nb-ink/70">
-                    Review your listing details and click "Create Listing" to make it live on FairBNB.
+                    Review your listing details and click "Create Listing" to store metadata on BNB Greenfield.
                   </p>
                 </div>
 
                 <div className="space-y-4">
+                  <div>
+                    <h3 className="font-medium text-nb-ink">Wallet & Blockchain</h3>
+                    <p className="text-sm text-nb-ink/70">
+                      Connected: {address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : 'Not connected'}
+                    </p>
+                    <p className="text-sm text-green-600">
+                      ✅ BNB Greenfield ready for metadata storage
+                    </p>
+                  </div>
+                  
                   <div>
                     <h3 className="font-medium text-nb-ink">Property Details</h3>
                     <p className="text-sm text-nb-ink/70">
@@ -480,6 +618,16 @@ export function AddListing() {
                     </p>
                   </div>
                 </div>
+
+                {greenfieldResult && (
+                  <div className="bg-green-100 border-2 border-green-300 rounded-nb p-4">
+                    <h3 className="font-medium text-green-900 mb-2">✅ Metadata Uploaded to BNB Greenfield</h3>
+                    <div className="text-sm text-green-700">
+                      <p><strong>Listing ID:</strong> {greenfieldResult.listingId}</p>
+                      <p><strong>Greenfield URL:</strong> <code className="text-xs">{greenfieldResult.metadataUrl}</code></p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </NBCard>
@@ -505,8 +653,12 @@ export function AddListing() {
                 Next
               </NBButton>
             ) : (
-              <NBButton type="submit" data-testid="create-listing">
-                Create Listing
+              <NBButton 
+                type="submit" 
+                data-testid="create-listing"
+                disabled={isUploading || !isConnected}
+              >
+                {isUploading ? 'Uploading to Greenfield...' : 'Create Listing'}
               </NBButton>
             )}
           </div>

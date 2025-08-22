@@ -7,7 +7,29 @@
     <title>FairBNB</title>
   </head>
   <body>
+    <script>
+      // Disable SES lockdown before anything else loads
+      if (typeof window !== 'undefined') {
+        window.lockdown = window.lockdown || function() {
+          console.warn('SES lockdown disabled for BNB Greenfield SDK compatibility');
+          return;
+        };
+      }
+      
+      // Polyfill for global object
+      if (typeof global === 'undefined') {
+        window.global = window;
+      }
+      
+      // Preserve Buffer and other critical objects
+      window.__preservedGlobals = {
+        Buffer: window.Buffer,
+        global: window.global,
+        process: window.process
+      };
+    </script>
     <div id="root"></div>
+    <script type="module" src="/src/disable-ses.js"></script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

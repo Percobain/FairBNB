@@ -6,8 +6,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { NBButton } from './NBButton';
 import { useAppStore } from '@/lib/stores/useAppStore';
-import { Home, Building, Search, Gavel, User, Menu, X, Wallet, LogOut } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Home, Building, Search, Gavel, User, Menu, X, Wallet, LogOut, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 /**
@@ -26,6 +26,8 @@ export function Layout({ children }) {
   } = useAppStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const roleDropdownRef = useRef(null);
 
   const navItems = [
     { path: '/', label: 'Home', icon: Home, testId: 'nav-home' },
@@ -92,6 +94,20 @@ export function Layout({ children }) {
     }
   }, [web3.account, initializeWeb3, disconnectWeb3]);
 
+  // Handle click outside for role dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target)) {
+        setRoleDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const handleConnectWallet = async () => {
     if (!window.ethereum) {
       toast.error('MetaMask is not installed. Please install MetaMask to use this app.');
@@ -119,6 +135,19 @@ export function Layout({ children }) {
   const formatAddress = (address) => {
     if (!address) return '';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const roleOptions = [
+    { value: 'landlord', label: 'Landlord', icon: Building },
+    { value: 'tenant', label: 'Tenant', icon: Search },
+    { value: 'jury', label: 'Jury', icon: Gavel }
+  ];
+
+  const currentRoleOption = roleOptions.find(option => option.value === currentUser.role);
+
+  const handleRoleSelect = (roleValue) => {
+    switchRole(roleValue);
+    setRoleDropdownOpen(false);
   };
 
   return (
@@ -156,15 +185,44 @@ export function Layout({ children }) {
             {/* User Menu & Mobile Toggle */}
             <div className="flex items-center space-x-3">
               {/* Role Switcher */}
-              <select
-                value={currentUser.role}
-                onChange={(e) => switchRole(e.target.value)}
-                className="px-3 py-1 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink text-sm focus:outline-none focus:ring-4 focus:ring-nb-accent"
-              >
-                <option value="landlord">Landlord</option>
-                <option value="tenant">Tenant</option>
-                <option value="jury">Jury</option>
-              </select>
+              <div className="relative" ref={roleDropdownRef}>
+                <button
+                  onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                  className="flex items-center space-x-2 px-3 py-2 border-2 border-nb-ink rounded-nb bg-nb-card text-nb-ink text-sm font-medium shadow-nb-sm hover:-translate-y-0.5 hover:shadow-nb active:translate-y-1 active:shadow-none focus:outline-none focus:ring-4 focus:ring-nb-accent transition-all duration-200 ease-out transform-gpu cursor-pointer"
+                >
+                  {currentRoleOption && (
+                    <>
+                      <currentRoleOption.icon className="w-4 h-4" />
+                      <span>{currentRoleOption.label}</span>
+                    </>
+                  )}
+                  <ChevronDown 
+                    className={cn(
+                      "w-4 h-4 transition-transform duration-200",
+                      roleDropdownOpen ? "rotate-180" : ""
+                    )} 
+                  />
+                </button>
+
+                {/* Dropdown Menu */}
+                {roleDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-full min-w-[140px] bg-nb-card border-2 border-nb-ink rounded-nb shadow-nb z-50">
+                    {roleOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleRoleSelect(option.value)}
+                        className={cn(
+                          "w-full flex items-center space-x-2 px-3 py-2 text-sm font-medium text-left hover:bg-nb-accent hover:text-nb-ink transition-colors duration-150 first:rounded-t-nb last:rounded-b-nb",
+                          currentUser.role === option.value ? "bg-nb-accent/20 text-nb-ink" : "text-nb-ink/80"
+                        )}
+                      >
+                        <option.icon className="w-4 h-4" />
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Wallet Connection */}
               {web3.isConnected ? (
