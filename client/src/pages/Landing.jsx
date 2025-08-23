@@ -21,29 +21,29 @@ export function Landing() {
   const roleCards = [
     {
       role: 'landlord',
-      title: 'I\'m a Landlord',
-      description: 'List your properties as NFTs and earn secure, transparent rental income.',
+      title: "I'm a Landlord",
+      description: 'List your rentals as NFTs and receive payments securely on-chain.',
       icon: Building,
       color: 'nb-accent',
-      features: ['NFT-backed listings', 'Automated escrow', 'Dispute protection'],
+      features: ['On-chain property ownership', 'Automated rent escrow'],
       testId: 'cta-landlord'
     },
     {
       role: 'tenant',
-      title: 'I\'m a Tenant',
-      description: 'Find verified properties with transparent terms and dispute resolution.',
+      title: "I'm a Tenant",
+      description: 'Book verified rentals with confidence and full transparency.',
       icon: Search,
       color: 'nb-accent-2',
-      features: ['Verified listings', 'Escrow protection', 'Fair dispute process'],
+      features: ['Secure escrowed payments', 'Transparent rental terms'],
       testId: 'cta-tenant'
     },
     {
       role: 'jury',
-      title: 'I\'m a Juror',
-      description: 'Participate in decentralized dispute resolution and earn rewards.',
+      title: "I'm a Juror",
+      description: 'Help resolve rental disputes fairly and earn rewards.',
       icon: Gavel,
       color: 'nb-warn',
-      features: ['Earn rewards', 'Fair voting', 'Transparent process'],
+      features: ['Decentralized dispute voting', 'Earn juror incentives'],
       testId: 'cta-jury'
     }
   ];
@@ -51,65 +51,66 @@ export function Landing() {
   const features = [
     {
       icon: Shield,
-      title: 'NFT-backed Agreements',
-      description: 'Every rental is secured by blockchain technology with immutable terms.'
+      title: 'On-chain Agreements',
+      description: 'Rentals are recorded as NFTs with tamper-proof terms on BNB Chain.'
     },
     {
       icon: Coins,
-      title: 'Escrowed Funds',
-      description: 'Funds are held safely in smart contracts until rental completion.'
+      title: 'Smart Escrow',
+      description: 'Payments are locked in escrow and released only when both sides agree.'
     },
     {
       icon: Gavel,
-      title: 'DAO-style Disputes',
-      description: 'Community-driven dispute resolution ensures fair outcomes for all.'
+      title: 'Community Disputes',
+      description: 'Unresolved conflicts are settled by a jury of community members.'
     },
     {
       icon: Users,
-      title: 'No Intermediaries',
-      description: 'Direct peer-to-peer rentals without traditional middlemen fees.'
+      title: 'Peer-to-Peer Rentals',
+      description: 'Connect landlords and tenants directly with no centralized middlemen.'
     }
   ];
+
 
   const howItWorks = [
     {
       step: '01',
-      title: 'Connect Wallet',
-      description: 'Connect your MetaMask wallet to access the decentralized rental platform.'
+      title: 'Connect Your Wallet',
+      description: 'Smooth onboarding experience by connecting MetaMask to our platform FairBNB.'
     },
     {
       step: '02',
-      title: 'Mint NFT',
-      description: 'Landlords create NFT listings with verified property details and rental terms.'
+      title: 'List or Browse Properties',
+      description: 'Landlords list rentals as NFTs with property details, while tenants browse available stays.'
     },
     {
       step: '03',
-      title: 'Escrow',
-      description: 'Tenants book properties and funds are held securely in smart contracts.'
+      title: 'Book with Escrow',
+      description: 'Tenants pay rent into a smart escrow contract, released only after a successful stay.'
     },
     {
       step: '04',
-      title: 'DAO Dispute',
-      description: 'Any disputes are resolved fairly by the decentralized community of jurors.'
+      title: 'Fair Resolution',
+      description: 'If a dispute arises, community jurors step in to deliver a transparent, fair outcome.'
     }
   ];
 
   const faqs = [
     {
-      question: 'How does the escrow system work?',
-      answer: 'Funds are held in smart contracts and automatically released when rental terms are met or disputes are resolved.'
+      question: 'How does FairBNB ensure safe payments?',
+      answer: 'When a tenant books a property, the rent is locked in a smart escrow contract. The landlord only receives the funds after the stay is completed or the terms are verified.'
     },
     {
-      question: 'What happens if there\'s a dispute?',
-      answer: 'Disputes are resolved by a decentralized jury system where community members vote on fair outcomes based on evidence.'
+      question: 'What if there is a dispute between landlord and tenant?',
+      answer: 'Disputes are handled by our community-driven jury system. Jurors review the evidence from both sides and vote on a fair resolution, ensuring transparency and trust.'
     },
     {
-      question: 'How do I connect my wallet?',
-      answer: 'Click the "Connect Wallet" button and approve the connection in MetaMask. Make sure you\'re on the BNB Smart Chain testnet.'
+      question: 'How do I get started as a tenant or landlord?',
+      answer: 'Just connect your wallet, then either browse available rentals as a tenant or create a property listing as a landlord. Everything runs directly on-chain.'
     },
     {
-      question: 'How do I become a juror?',
-      answer: 'Simply switch to the Jury role in the header and start participating in dispute resolution to earn rewards.'
+      question: 'Can anyone become a juror?',
+      answer: 'Yes! By switching to the Juror role in the platform, you can participate in resolving disputes and earn rewards for fair decisions.'
     }
   ];
 
@@ -144,45 +145,35 @@ export function Landing() {
             transition={{ duration: 0.6 }}
           >
             <h1 className="font-display font-bold text-4xl md:text-6xl text-nb-ink mb-6">
-              Trustless rentals.{' '}
+              Decentralized rentals.{' '}
               <span className="text-nb-accent">Transparent</span>{' '}
               outcomes.
             </h1>
             <p className="font-body text-lg md:text-xl text-nb-ink/80 mb-8 max-w-2xl mx-auto">
-              The future of property rental powered by blockchain technology. 
-              Secure, transparent, and fair for everyone.
+              The future of rentals reimagined with blockchain. <br />
+              Open, secure, and truly fair for every renter and owner.
             </p>
             
-            {/* Wallet Connection */}
-            <div className="mb-8">
-              {!web3.isConnected ? (
-                <NBButton 
-                  size="lg" 
-                  onClick={handleConnectWallet}
-                  disabled={web3.isInitializing}
-                  className="mb-4"
-                >
-                  <Wallet className="w-5 h-5 mr-2" />
-                  {web3.isInitializing ? 'Connecting...' : 'Connect Wallet'}
-                </NBButton>
-              ) : (
-                <div className="mb-4">
-                  <NBButton 
-                    variant="secondary" 
-                    size="sm" 
-                    onClick={handleDisconnectWallet}
-                  >
-                    Disconnect
-                  </NBButton>
-                </div>
-              )}
-              
-              {web3.error && (
-                <div className="bg-nb-error/20 border-2 border-nb-error rounded-nb p-4 mb-4">
-                  <p className="text-sm text-nb-error">{web3.error}</p>
-                </div>
-              )}
-            </div>
+                {/* Wallet Connection */}
+                  <div className="mb-8">
+                    {!web3.isConnected && (
+                    <NBButton 
+                      size="lg" 
+                      onClick={handleConnectWallet}
+                      disabled={web3.isInitializing}
+                      className="mb-4"
+                    >
+                      <Wallet className="w-5 h-5 mr-2" />
+                      {web3.isInitializing ? 'Connecting...' : 'Connect Wallet'}
+                    </NBButton>
+                    )}
+                    
+                    {web3.error && (
+                    <div className="bg-nb-error/20 border-2 border-nb-error rounded-nb p-4 mb-4">
+                      <p className="text-sm text-nb-error">{web3.error}</p>
+                    </div>
+                    )}
+                  </div>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/tenant">
@@ -199,64 +190,64 @@ export function Landing() {
           </motion.div>
         </div>
       </section>
-
-      {/* Role Cards */}
-      <section className="px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="font-display font-bold text-3xl text-nb-ink mb-4">
-              Choose Your Role
-            </h2>
-            <p className="font-body text-lg text-nb-ink/70">
-              Get started with the role that best describes you
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {roleCards.map(({ role, title, description, icon: Icon, color, features, testId }, index) => (
-              <motion.div
-                key={role}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
+        <section className="px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+          <h2 className="font-display font-bold text-3xl text-nb-ink mb-4">
+            Choose Your Role
+          </h2>
+          <p className="font-body text-lg text-nb-ink/70">
+            Get started with the role that best describes you
+          </p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {roleCards.map(({ role, title, description, icon: Icon, color, features, testId }, index) => (
+            <motion.div
+              key={role}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: index * 0.1 }}
+            >
+              <NBCard className="h-full hover:-translate-y-2 transition-transform duration-300">
+            <div className="text-center space-y-4">
+              <div className={`w-16 h-16 bg-${color} border-2 border-nb-ink rounded-nb mx-auto flex items-center justify-center`}>
+                <Icon className="w-8 h-8 text-nb-ink" />
+              </div>
+              <h3 className="font-display font-bold text-xl text-nb-ink">
+                {title}
+              </h3>
+              <p className="font-body text-nb-ink/70">
+                {description}
+              </p>
+              <ul className="space-y-2 text-sm">
+                {features.map((feature, idx) => (
+              <li key={idx} className="text-nb-ink/80 flex items-center justify-center">
+                <span className="w-2 h-2 bg-nb-ink rounded-full mr-2"></span>
+                {feature}
+              </li>
+                ))}
+              </ul>
+              <div className="mt-6">
+                <Link to={`/${role}`}>
+              <NBButton 
+                className="w-full" 
+                data-testid={testId}
+                disabled={!web3.isConnected}
               >
-                <NBCard className="h-full hover:-translate-y-2 transition-transform duration-300">
-                  <div className="text-center space-y-4">
-                    <div className={`w-16 h-16 bg-${color} border-2 border-nb-ink rounded-nb mx-auto flex items-center justify-center`}>
-                      <Icon className="w-8 h-8 text-nb-ink" />
-                    </div>
-                    <h3 className="font-display font-bold text-xl text-nb-ink">
-                      {title}
-                    </h3>
-                    <p className="font-body text-nb-ink/70">
-                      {description}
-                    </p>
-                    <ul className="space-y-2 text-sm">
-                      {features.map((feature, idx) => (
-                        <li key={idx} className="text-nb-ink/80 flex items-center justify-center">
-                          <span className="w-2 h-2 bg-nb-ink rounded-full mr-2"></span>
-                          {feature}
-                        </li>
-                      ))}
-                    </ul>
-                    <Link to={`/${role}`}>
-                      <NBButton 
-                        className="w-full" 
-                        data-testid={testId}
-                        disabled={!web3.isConnected}
-                      >
-                        Get Started
-                      </NBButton>
-                    </Link>
-                  </div>
-                </NBCard>
-              </motion.div>
-            ))}
+                Get Started
+              </NBButton>
+                </Link>
+              </div>
+            </div>
+              </NBCard>
+            </motion.div>
+          ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* How It Works */}
+        {/* How It Works */}
       <section className="px-4 sm:px-6 lg:px-8 bg-nb-accent/10 py-20">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">

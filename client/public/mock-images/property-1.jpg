@@ -1,8 +1,0 @@
-<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
-  <rect width="400" height="300" fill="#F7F5F2"/>
-  <rect x="2" y="2" width="396" height="296" stroke="#111111" stroke-width="2" fill="none"/>
-  <path d="M150 100L250 100L250 200L150 200Z" stroke="#111111" stroke-width="2" fill="none"/>
-  <rect x="170" y="120" width="20" height="30" fill="#111111"/>
-  <rect x="210" y="120" width="20" height="30" fill="#111111"/>
-  <text x="200" y="250" text-anchor="middle" fill="#111111" font-family="sans-serif" font-size="14">Property 1</text>
-</svg>

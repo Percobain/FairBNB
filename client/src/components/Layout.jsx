@@ -130,7 +130,11 @@ export function Layout({ children }) {
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-nb-accent border-2 border-nb-ink rounded flex items-center justify-center">
-                <span className="font-display font-bold text-nb-ink">F</span>
+              <img
+                src="/logoSq.png"
+                alt="FairBNB Logo"
+                className="w-8 h-8 border-2 border-nb-ink rounded object-cover"
+              />
               </div>
               <span className="font-display font-bold text-xl text-nb-ink">
                 FairBNB
@@ -156,7 +160,7 @@ export function Layout({ children }) {
             {/* User Menu & Mobile Toggle */}
             <div className="flex items-center space-x-3">
               {/* Role Switcher */}
-              <select
+              {/* <select
                 value={currentUser.role}
                 onChange={(e) => switchRole(e.target.value)}
                 className="px-3 py-1 border-2 border-nb-ink rounded-nb bg-nb-bg text-nb-ink text-sm focus:outline-none focus:ring-4 focus:ring-nb-accent"
@@ -164,7 +168,7 @@ export function Layout({ children }) {
                 <option value="landlord">Landlord</option>
                 <option value="tenant">Tenant</option>
                 <option value="jury">Jury</option>
-              </select>
+              </select> */}
 
               {/* Wallet Connection */}
               {web3.isConnected ? (
@@ -278,18 +282,17 @@ export function Layout({ children }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <div className="w-6 h-6 bg-nb-accent border-2 border-nb-ink rounded flex items-center justify-center">
-                  <span className="font-display font-bold text-nb-ink text-sm">F</span>
-                </div>
+                <img
+                  src="/logoSq.png"
+                  alt="FairBNB Logo"
+                  className="w-8 h-8 border-2 border-nb-ink rounded object-cover"
+                />
                 <span className="font-display font-bold text-lg text-nb-ink">
                   FairBNB
                 </span>
               </div>
               <p className="text-sm text-nb-ink/70 font-body">
-                Trustless rentals. Transparent outcomes.
-              </p>
-              <p className="text-xs text-nb-ink/50 font-body mt-2">
-                Demo application - no real transactions
+                Decentralized rentals. Fair resolutions.
               </p>
             </div>
 
@@ -315,10 +318,7 @@ export function Layout({ children }) {
           <div className="border-t-2 border-nb-ink/20 pt-6 mt-8">
             <div className="flex flex-col sm:flex-row justify-between items-center">
               <p className="text-sm text-nb-ink/70 font-body">
-                © 2025 FairBNB Demo. Made with {'<3'} by NGM GNG.
-              </p>
-              <p className="text-xs text-nb-ink/50 font-body mt-2 sm:mt-0">
-                v1.0.0
+                © 2025 FairBNB. Made with {'<3'} by NGM GNG.
               </p>
             </div>
           </div>
