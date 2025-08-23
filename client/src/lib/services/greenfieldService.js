@@ -1,269 +1,330 @@
 /**
- * @fileoverview BNB Greenfield service for storage operations
+ * @fileoverview BNB Greenfield service for storage operations - SDK Integration
  */
 
-import { ethers } from 'ethers';
+import { Client, Long, VisibilityType } from "@bnb-chain/greenfield-js-sdk";
 
-// BNB Greenfield Configuration
+// BNB Greenfield Configuration - Same as bnbgf
 const GREENFIELD_CONFIG = {
-  rpcUrl: 'https://gnfd-testnet-fullnode-tendermint-us.bnbchain.org',
-  chainId: 'greenfield_5600-1',
-  spEndpoints: [
-    'https://gnfd-testnet-sp1.bnbchain.org',
-    'https://gnfd-testnet-sp2.bnbchain.org',
-    'https://gnfd-testnet-sp3.bnbchain.org',
-    'https://gnfd-testnet-sp4.bnbchain.org'
-  ],
-  bucketName: 'test-fairbnb',
-  primarySPAddress: '0x5ccF0F6b78a37Ef4e2CcBC10D155c28Fb8bE9BaF'
+    grpcUrl: "https://gnfd-testnet-fullnode-tendermint-ap.bnbchain.org",
+    rpcUrl: "https://gnfd-testnet-fullnode-tendermint-ap.bnbchain.org",
+    chainId: "5600",
+    bucketName: "hellotoys",
 };
 
 class GreenfieldService {
-  constructor() {
-    this.currentSPEndpoint = null;
-    this.account = null;
-    this.signer = null;
-    this.bucketCreated = false;
-  }
-
-  /**
-   * Initialize the service
-   */
-  initialize(account, signer) {
-    this.account = account;
-    this.signer = signer;
-    this.currentSPEndpoint = GREENFIELD_CONFIG.spEndpoints[
-      Math.floor(Math.random() * GREENFIELD_CONFIG.spEndpoints.length)
-    ];
-  }
-
-  /**
-   * Create bucket if it doesn't exist (restored method)
-   */
-  async ensureBucketExists() {
-    try {
-      if (this.bucketCreated) {
-        return { success: true, bucketName: GREENFIELD_CONFIG.bucketName };
-      }
-
-      // Check if bucket exists
-      const exists = await this.bucketExists(GREENFIELD_CONFIG.bucketName);
-      if (exists.success && exists.exists) {
-        this.bucketCreated = true;
-        return { success: true, bucketName: GREENFIELD_CONFIG.bucketName };
-      }
-
-      // Create bucket
-      const result = await this.createBucket(GREENFIELD_CONFIG.bucketName);
-      if (result.success) {
-        this.bucketCreated = true;
-      }
-      return result;
-    } catch (error) {
-      console.error('Failed to ensure bucket exists:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+    constructor() {
+        this.client = null;
+        this.account = null;
+        this.provider = null;
+        this.bucketCreated = false;
+        this.offChainData = null;
+        this.selectedSp = null;
     }
-  }
 
-  /**
-   * Create a bucket using REST API
-   */
-  async createBucket(bucketName) {
-    try {
-      const createBucketUrl = `${this.currentSPEndpoint}/greenfield/storage/create_bucket`;
-      
-      const bucketData = {
-        bucket_name: bucketName,
-        creator: this.account,
-        visibility: 'VISIBILITY_TYPE_PUBLIC_READ',
-        payment_address: this.account,
-        primary_sp_address: GREENFIELD_CONFIG.primarySPAddress,
-        primary_sp_approval: {
-          expired_height: '1000000',
-          sig: '0x' // Will be signed
-        },
-        charged_read_quota: '0'
-      };
+    /**
+     * Initialize the service with SDK client
+     */
+    async initialize(account, provider) {
+        try {
+            this.account = account;
+            this.provider = provider;
 
-      const response = await fetch(createBucketUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.account}`
-        },
-        body: JSON.stringify(bucketData)
-      });
+            // Create Greenfield client
+            this.client = Client.create(
+                GREENFIELD_CONFIG.grpcUrl,
+                GREENFIELD_CONFIG.chainId
+            );
 
-      if (!response.ok) {
-        throw new Error(`Failed to create bucket: ${response.statusText}`);
-      }
+            // Get storage providers
+            await this.setupStorageProvider();
 
-      const result = await response.json();
-      return {
-        success: true,
-        bucketName,
-        result
-      };
-    } catch (error) {
-      console.error('Failed to create bucket:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
+            // Setup off-chain auth
+            await this.setupOffChainAuth();
 
-  /**
-   * Upload object using REST API
-   */
-  async uploadObject(bucketName, objectName, file) {
-    try {
-      const uploadUrl = `${this.currentSPEndpoint}/greenfield/storage/put_object`;
-      
-      const formData = new FormData();
-      formData.append('bucket_name', bucketName);
-      formData.append('object_name', objectName);
-      formData.append('file', file);
-      formData.append('creator', this.account);
-      formData.append('visibility', 'VISIBILITY_TYPE_PUBLIC_READ');
-      formData.append('content_type', file.type);
-      formData.append('redundancy_type', 'REDUNDANCY_EC_TYPE');
-
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.account}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      return {
-        success: true,
-        url: `greenfield://${bucketName}/${objectName}`,
-        result
-      };
-    } catch (error) {
-      console.error('Failed to upload object:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Upload metadata JSON to Greenfield (restored method)
-   */
-  async uploadMetadata(metadata, tokenId) {
-    try {
-      const metadataJson = JSON.stringify(metadata, null, 2);
-      const blob = new Blob([metadataJson], { type: 'application/json' });
-      const file = new File([blob], 'metadata.json');
-
-      const objectName = `metadata/${tokenId}/metadata.json`;
-      return await this.uploadObject(GREENFIELD_CONFIG.bucketName, objectName, file);
-    } catch (error) {
-      console.error('Failed to upload metadata:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Get object using REST API
-   */
-  async getObject(bucketName, objectName) {
-    try {
-      const getObjectUrl = `${this.currentSPEndpoint}/greenfield/storage/get_object`;
-      
-      const params = new URLSearchParams({
-        bucket_name: bucketName,
-        object_name: objectName
-      });
-
-      const response = await fetch(`${getObjectUrl}?${params}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.account}`
+            return { success: true };
+        } catch (error) {
+            console.warn("Greenfield initialization failed:", error);
+            return { success: false, error: error.message };
         }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get object: ${response.statusText}`);
-      }
-
-      const data = await response.blob();
-      return {
-        success: true,
-        data
-      };
-    } catch (error) {
-      console.error('Failed to get object:', error);
-      return {
-        success: false,
-        error: error.message
-      };
     }
-  }
 
-  /**
-   * Check if bucket exists
-   */
-  async bucketExists(bucketName) {
-    try {
-      const headBucketUrl = `${this.currentSPEndpoint}/greenfield/storage/head_bucket`;
-      
-      const params = new URLSearchParams({
-        bucket_name: bucketName
-      });
+    /**
+     * Setup storage provider - same as bnbgf
+     */
+    async setupStorageProvider() {
+        try {
+            const sps = await this.client.sp.getStorageProviders();
+            const finalSps = (sps ?? []).filter((v) =>
+                v.endpoint.includes("nodereal")
+            );
 
-      const response = await fetch(`${headBucketUrl}?${params}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.account}`
+            if (finalSps.length === 0) {
+                throw new Error("No storage providers available");
+            }
+
+            const selectIndex = Math.floor(Math.random() * finalSps.length);
+            const secondarySpAddresses = [
+                ...finalSps.slice(0, selectIndex),
+                ...finalSps.slice(selectIndex + 1),
+            ].map((item) => item.operatorAddress);
+
+            this.selectedSp = {
+                id: finalSps[selectIndex].id,
+                endpoint: finalSps[selectIndex].endpoint,
+                primarySpAddress: finalSps[selectIndex]?.operatorAddress,
+                sealAddress: finalSps[selectIndex].sealAddress,
+                secondarySpAddresses,
+            };
+
+            console.log("Selected SP:", this.selectedSp);
+        } catch (error) {
+            console.warn("Failed to setup storage provider:", error);
+            throw error;
         }
-      });
-
-      if (response.status === 404) {
-        return {
-          success: true,
-          exists: false
-        };
-      }
-
-      if (!response.ok) {
-        throw new Error(`Failed to check bucket: ${response.statusText}`);
-      }
-
-      return {
-        success: true,
-        exists: true
-      };
-    } catch (error) {
-      console.error('Failed to check bucket:', error);
-      return {
-        success: false,
-        error: error.message
-      };
     }
-  }
 
-  /**
-   * Get public URL for object (restored method)
-   */
-  getPublicUrl(bucketName, objectName) {
-    return `https://${bucketName}.${this.currentSPEndpoint.replace('https://', '')}/${objectName}`;
-  }
+    /**
+     * Setup off-chain authentication - same as bnbgf
+     */
+    async setupOffChainAuth() {
+        try {
+            const storageKey = `greenfield_auth_${this.account}`;
+            const storageResStr = localStorage.getItem(storageKey);
+
+            if (storageResStr) {
+                const storageRes = JSON.parse(storageResStr);
+                if (storageRes.expirationTime > Date.now()) {
+                    this.offChainData = storageRes;
+                    return;
+                } else {
+                    localStorage.removeItem(storageKey);
+                }
+            }
+
+            // Get all SPs for auth
+            const sps = await this.client.sp.getStorageProviders();
+            const allSps = (sps ?? [])
+                .filter((v) => v.endpoint.includes("nodereal"))
+                .map((sp) => ({
+                    address: sp.operatorAddress,
+                    endpoint: sp.endpoint,
+                    name: sp.description?.moniker,
+                }));
+
+            const offchainAuthRes =
+                await this.client.offchainauth.genOffChainAuthKeyPairAndUpload(
+                    {
+                        sps: allSps,
+                        chainId: GREENFIELD_CONFIG.chainId,
+                        expirationMs: 5 * 24 * 60 * 60 * 1000, // 5 days
+                        domain: window.location.origin,
+                        address: this.account,
+                    },
+                    this.provider
+                );
+
+            const { code, body: offChainData } = offchainAuthRes;
+            if (code !== 0 || !offChainData) {
+                throw new Error("Failed to generate off-chain auth keys");
+            }
+
+            localStorage.setItem(storageKey, JSON.stringify(offChainData));
+            this.offChainData = offChainData;
+
+            console.log("Off-chain auth setup complete");
+        } catch (error) {
+            console.warn("Failed to setup off-chain auth:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Ensure bucket exists - same as bnbgf
+     */
+    async ensureBucketExists() {
+        try {
+            if (this.bucketCreated) {
+                return {
+                    success: true,
+                    bucketName: GREENFIELD_CONFIG.bucketName,
+                };
+            }
+
+            if (!this.client || !this.selectedSp || !this.offChainData) {
+                throw new Error("Greenfield not properly initialized");
+            }
+
+            // Try to create bucket
+            const createBucketTx = await this.client.bucket.createBucket({
+                bucketName: GREENFIELD_CONFIG.bucketName,
+                creator: this.account,
+                primarySpAddress: this.selectedSp.primarySpAddress,
+                visibility: VisibilityType.VISIBILITY_TYPE_PUBLIC_READ,
+                chargedReadQuota: Long.fromString("0"),
+                paymentAddress: this.account,
+            });
+
+            const simulateInfo = await createBucketTx.simulate({
+                denom: "BNB",
+            });
+
+            const res = await createBucketTx.broadcast({
+                denom: "BNB",
+                gasLimit: Number(simulateInfo?.gasLimit),
+                gasPrice: simulateInfo?.gasPrice || "5000000000",
+                payer: this.account,
+                granter: "",
+            });
+
+            if (res.code === 0) {
+                this.bucketCreated = true;
+                console.log("Bucket created successfully");
+            }
+
+            return { success: true, bucketName: GREENFIELD_CONFIG.bucketName };
+        } catch (error) {
+            // Bucket might already exist, which is fine
+            console.warn(
+                "Bucket creation warning (might already exist):",
+                error.message
+            );
+            this.bucketCreated = true;
+            return { success: true, bucketName: GREENFIELD_CONFIG.bucketName };
+        }
+    }
+
+    /**
+     * Upload file using delegate upload - same as bnbgf
+     */
+    async uploadFile(file, objectName) {
+        try {
+            if (!this.client || !this.offChainData) {
+                throw new Error("Greenfield not properly initialized");
+            }
+
+            await this.ensureBucketExists();
+
+            const res = await this.client.object.delegateUploadObject(
+                {
+                    bucketName: GREENFIELD_CONFIG.bucketName,
+                    objectName: objectName,
+                    body: file,
+                    delegatedOpts: {
+                        visibility: VisibilityType.VISIBILITY_TYPE_PUBLIC_READ,
+                    },
+                    onProgress: (e) => {
+                        console.log("Greenfield upload progress:", e.percent);
+                    },
+                },
+                {
+                    type: "EDDSA",
+                    address: this.account,
+                    domain: window.location.origin,
+                    seed: this.offChainData.seedString,
+                }
+            );
+
+            if (res.code === 0) {
+                return {
+                    success: true,
+                    url: `greenfield://${GREENFIELD_CONFIG.bucketName}/${objectName}`,
+                    objectName: objectName,
+                };
+            } else {
+                throw new Error(`Upload failed with code: ${res.code}`);
+            }
+        } catch (error) {
+            console.warn("Greenfield upload failed:", error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    }
+
+    /**
+     * Upload metadata JSON to Greenfield
+     */
+    async uploadMetadata(metadata, tokenId) {
+        try {
+            const metadataJson = JSON.stringify(metadata, null, 2);
+            const blob = new Blob([metadataJson], { type: "application/json" });
+            const file = new File([blob], "metadata.json");
+            const objectName = `metadata/${tokenId}/metadata.json`;
+
+            return await this.uploadFile(file, objectName);
+        } catch (error) {
+            console.warn("Failed to upload metadata to Greenfield:", error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    }
+
+    /**
+     * Upload image to Greenfield
+     */
+    async uploadImage(imageFile, tokenId) {
+        try {
+            const fileExtension = imageFile.name.split(".").pop();
+            const objectName = `images/${tokenId}/image.${fileExtension}`;
+
+            return await this.uploadFile(imageFile, objectName);
+        } catch (error) {
+            console.warn("Failed to upload image to Greenfield:", error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    }
+
+    /**
+     * Download file from Greenfield
+     */
+    async downloadFile(objectName) {
+        try {
+            if (!this.client || !this.offChainData) {
+                throw new Error("Greenfield not properly initialized");
+            }
+
+            const res = await this.client.object.downloadFile(
+                {
+                    bucketName: GREENFIELD_CONFIG.bucketName,
+                    objectName: objectName,
+                },
+                {
+                    type: "EDDSA",
+                    address: this.account,
+                    domain: window.location.origin,
+                    seed: this.offChainData.seedString,
+                }
+            );
+
+            return {
+                success: true,
+                data: res,
+            };
+        } catch (error) {
+            console.warn("Failed to download from Greenfield:", error);
+            return {
+                success: false,
+                error: error.message,
+            };
+        }
+    }
+
+    /**
+     * Get public URL for object
+     */
+    getPublicUrl(objectName) {
+        if (!this.selectedSp) {
+            return null;
+        }
+        return `${this.selectedSp.endpoint}/${GREENFIELD_CONFIG.bucketName}/${objectName}`;
+    }
 }
 
 // Export singleton instance

@@ -1,17 +1,23 @@
-import path from "path"
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react-swc'
+import path from "path";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-const __dirname = path.resolve()
+const __dirname = path.resolve();
 
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src"),
+    plugins: [react()],
+    resolve: {
+        alias: {
+            "@": path.resolve(__dirname, "src"),
+            process: "process/browser",
+            stream: "stream-browserify",
+            util: "util",
+        },
     },
-  },
-  css: {
-    postcss: './postcss.config.js',
-  }
-})
+    define: {
+        global: "globalThis",
+    },
+    optimizeDeps: {
+        include: ["@bnb-chain/greenfield-js-sdk"],
+    },
+});
