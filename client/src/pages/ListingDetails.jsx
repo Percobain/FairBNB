@@ -9,9 +9,10 @@ import { NBCard } from '@/components/NBCard';
 import { NBButton } from '@/components/NBButton';
 import { Gallery } from '@/components/Gallery';
 import { PricingWidget } from '@/components/PricingWidget';
+import { ListingDetailsSkeleton } from '@/components/SkeletonLoader';
 import { web3Service } from '@/lib/services/web3Service';
 import { useAppStore } from '@/lib/stores/useAppStore';
-import { MapPin, User, Calendar, Home, Wifi, Car, Shield, Star, Building, ShieldCheck } from 'lucide-react';
+import { MapPin, User, Calendar, Home, Wifi, Car, Shield, Star, Building, ShieldCheck, Tv, Utensils, Waves, TreePine, Dumbbell, Wind, Bath, Bed, Users, Coffee, Gamepad2, Music, Camera, Baby } from 'lucide-react';
 
 /**
  * Property listing details with blockchain data
@@ -27,9 +28,156 @@ export function ListingDetails() {
   const [listingDetails, setListingDetails] = useState(null);
   const [isCurrentUserInvolved, setIsCurrentUserInvolved] = useState(false);
 
+  // Realistic mock data generators
+  const generateRealisticPhotos = (propertyType, city) => {
+    const basePhotos = {
+      'Apartment': [
+        'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1560185127-6ed189bf02f4?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1536376072261-38c75010e6c9?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1586105251261-72a756497a11?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1505873242700-f289a29e1e0f?w=800&h=600&fit=crop'
+      ],
+      'Studio': [
+        'https://images.unsplash.com/photo-1536376072261-38c75010e6c9?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1586105251261-72a756497a11?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=800&h=600&fit=crop'
+      ],
+      'House': [
+        'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1583608205776-bfd35f0d9f83?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1505873242700-f289a29e1e0f?w=800&h=600&fit=crop'
+      ],
+      'PG': [
+        'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1586105251261-72a756497a11?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1560448205-17d3a46c84de?w=800&h=600&fit=crop'
+      ],
+      'CoLiving': [
+        'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1571508601793-a2b83b9a4b6b?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop',
+        'https://images.unsplash.com/photo-1543373014-cfe4f4bc1cdf?w=800&h=600&fit=crop'
+      ]
+    };
+    return basePhotos[propertyType] || basePhotos['Apartment'];
+  };
+
+  const generateRealisticAmenities = (propertyType) => {
+    const amenityPools = {
+      'Apartment': {
+        basic: ['Wi-Fi', 'AC', 'Kitchen', 'Refrigerator', 'Washing Machine'],
+        comfort: ['TV', 'Balcony', 'Wardrobe', 'Study Table', 'Hot Water'],
+        premium: ['Parking', 'Security', 'Elevator', 'Power Backup', 'Water Purifier'],
+        luxury: ['Gym', 'Swimming Pool', 'Garden', 'CCTV', 'Intercom']
+      },
+      'Studio': {
+        basic: ['Wi-Fi', 'AC', 'Kitchenette', 'Refrigerator', 'Study Area'],
+        comfort: ['TV', 'Wardrobe', 'Hot Water', 'Window View'],
+        premium: ['Security', 'Power Backup', 'Water Purifier'],
+        luxury: ['Gym Access', 'Rooftop', 'CCTV']
+      },
+      'House': {
+        basic: ['Wi-Fi', 'AC', 'Full Kitchen', 'Refrigerator', 'Washing Machine'],
+        comfort: ['TV', 'Garden', 'Parking', 'Study Room', 'Hot Water'],
+        premium: ['Security System', 'Power Backup', 'Water Purifier', 'Solar Panels'],
+        luxury: ['Swimming Pool', 'Home Theater', 'Gym Room', 'Servant Quarter']
+      },
+      'PG': {
+        basic: ['Wi-Fi', 'AC', 'Food Service', 'Laundry', 'Common Kitchen'],
+        comfort: ['TV Lounge', 'Study Room', 'Hot Water', 'Cleaning Service'],
+        premium: ['Security', 'CCTV', 'Power Backup', 'Water Purifier'],
+        luxury: ['Gym', 'Recreation Room', 'Rooftop', 'Mini Library']
+      },
+      'CoLiving': {
+        basic: ['Wi-Fi', 'AC', 'Shared Kitchen', 'Laundry', 'Common Areas'],
+        comfort: ['TV Lounge', 'Study Spaces', 'Hot Water', 'Cleaning Service'],
+        premium: ['24/7 Security', 'CCTV', 'Power Backup', 'Water Purifier'],
+        luxury: ['Gym', 'Swimming Pool', 'Recreation Room', 'Coworking Space', 'Events']
+      }
+    };
+
+    const typeAmenities = amenityPools[propertyType] || amenityPools['Apartment'];
+    const selectedAmenities = [
+      ...typeAmenities.basic,
+      ...typeAmenities.comfort.slice(0, Math.floor(Math.random() * 3) + 1),
+      ...typeAmenities.premium.slice(0, Math.floor(Math.random() * 2) + 1)
+    ];
+
+    // Sometimes add luxury amenities
+    if (Math.random() > 0.7) {
+      selectedAmenities.push(...typeAmenities.luxury.slice(0, Math.floor(Math.random() * 2) + 1));
+    }
+
+    return [...new Set(selectedAmenities)]; // Remove duplicates
+  };
+
+  const generateRealisticReviews = (propertyType, city) => {
+    const reviewTemplates = [
+      {
+        name: "Priya Sharma",
+        rating: 5,
+        text: "Excellent property! The landlord is very responsive and the maintenance is top-notch. Great location with easy access to public transport.",
+        avatar: "PS"
+      },
+      {
+        name: "Rahul Kumar",
+        rating: 4,
+        text: "Good value for money. The apartment is well-furnished and the neighborhood is safe. Minor issues with water pressure but overall satisfied.",
+        avatar: "RK"
+      },
+      {
+        name: "Anita Gupta",
+        rating: 5,
+        text: "Loved staying here! Very clean, modern amenities, and great neighbors. The kitchen is fully equipped and perfect for cooking.",
+        avatar: "AG"
+      },
+      {
+        name: "Vikram Singh",
+        rating: 4,
+        text: "Decent place with good connectivity. The security is reliable and parking is convenient. Would recommend to working professionals.",
+        avatar: "VS"
+      },
+      {
+        name: "Meera Patel",
+        rating: 5,
+        text: "Amazing experience! The property exactly matches the photos. Very peaceful area and all promised amenities are available.",
+        avatar: "MP"
+      },
+      {
+        name: "Arjun Reddy",
+        rating: 4,
+        text: "Great for students and young professionals. Good internet speed for work from home. The common areas are well-maintained.",
+        avatar: "AR"
+      }
+    ];
+
+    // Select 3-4 random reviews
+    const numReviews = Math.floor(Math.random() * 2) + 3;
+    const selectedReviews = reviewTemplates
+      .sort(() => Math.random() - 0.5)
+      .slice(0, numReviews);
+
+    return selectedReviews;
+  };
+
   // Helper function to convert IPFS URL to gateway URL
   const getImageUrl = (ipfsUrl) => {
-    if (!ipfsUrl) return '/mock-images/placeholder-property.jpg';
+    if (!ipfsUrl) return 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop';
     
     if (ipfsUrl.startsWith('ipfs://')) {
       return ipfsUrl.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
@@ -43,7 +191,7 @@ export function ListingDetails() {
       return `https://gateway.pinata.cloud/ipfs/${ipfsUrl}`;
     }
     
-    return '/mock-images/placeholder-property.jpg';
+    return 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop';
   };
 
   useEffect(() => {
@@ -85,22 +233,12 @@ export function ListingDetails() {
 
         setIsCurrentUserInvolved(isInvolved);
 
-        // Create mock photos array with the main image
-        const photos = [
-          imageUrl,
-          '/mock-images/property-2.jpg',
-          '/mock-images/property-3.jpg',
-          '/mock-images/property-4.jpg'
-        ];
+        // Generate realistic mock data
+        const realisticPhotos = generateRealisticPhotos(metadata.propertyType, metadata.city);
+        realisticPhotos[0] = imageUrl; // Keep the original image as first
 
-        // Mock amenities based on property type
-        const mockAmenities = {
-          'Apartment': ['Wi-Fi', 'AC', 'Kitchen', 'Security', 'Parking', 'Washer'],
-          'Studio': ['Wi-Fi', 'AC', 'Kitchen', 'Security'],
-          'PG': ['Wi-Fi', 'AC', 'Security', 'Food'],
-          'CoLiving': ['Wi-Fi', 'AC', 'Kitchen', 'Gym', 'Common Area', 'Security'],
-          'House': ['Wi-Fi', 'AC', 'Kitchen', 'Garden', 'Parking', 'Security']
-        };
+        const realisticAmenities = generateRealisticAmenities(metadata.propertyType);
+        const realisticReviews = generateRealisticReviews(metadata.propertyType, metadata.city);
 
         const propertyData = {
           id: id,
@@ -119,9 +257,12 @@ export function ListingDetails() {
           availableFrom: metadata.availableFrom,
           minDurationMonths: metadata.minDurationMonths,
           maxDurationMonths: metadata.maxDurationMonths,
-          photos: photos,
+          photos: realisticPhotos,
           coverImage: 0,
-          amenities: mockAmenities[metadata.propertyType] || ['Wi-Fi', 'AC', 'Kitchen'],
+          amenities: realisticAmenities,
+          reviews: realisticReviews,
+          avgRating: (realisticReviews.reduce((acc, review) => acc + review.rating, 0) / realisticReviews.length).toFixed(1),
+          totalReviews: realisticReviews.length,
           isListed: listingResult.isListed,
           isRented: rentalResult.isActive,
           isDisputed: rentalResult.isDisputed,
@@ -196,25 +337,57 @@ export function ListingDetails() {
 
   const amenityIcons = {
     'Wi-Fi': Wifi,
-    'AC': Home,
+    'AC': Wind,
     'Parking': Car,
     'Security': Shield,
-    'Kitchen': Home,
-    'Washer': Home,
-    'Gym': Home,
-    'Pool': Home,
-    'Garden': Home,
+    'Kitchen': Utensils,
+    'Full Kitchen': Utensils,
+    'Kitchenette': Utensils,
+    'Common Kitchen': Utensils,
+    'Shared Kitchen': Utensils,
+    'Washing Machine': Bath,
+    'Laundry': Bath,
+    'TV': Tv,
+    'TV Lounge': Tv,
+    'Gym': Dumbbell,
+    'Gym Access': Dumbbell,
+    'Gym Room': Dumbbell,
+    'Swimming Pool': Waves,
+    'Pool': Waves,
+    'Garden': TreePine,
     'Balcony': Home,
-    'Food': Home,
-    'Common Area': Home
+    'Wardrobe': Home,
+    'Study Table': Home,
+    'Study Room': Home,
+    'Study Area': Home,
+    'Study Spaces': Home,
+    'Hot Water': Bath,
+    'Water Purifier': Bath,
+    'Power Backup': Home,
+    'Elevator': Home,
+    'CCTV': Camera,
+    'Intercom': Home,
+    'Refrigerator': Home,
+    'Food Service': Coffee,
+    'Food': Coffee,
+    'Cleaning Service': Home,
+    'Recreation Room': Gamepad2,
+    'Common Areas': Users,
+    'Common Area': Users,
+    'Coworking Space': Home,
+    'Events': Music,
+    'Home Theater': Tv,
+    'Rooftop': Home,
+    'Mini Library': Home,
+    'Solar Panels': Home,
+    'Servant Quarter': Home,
+    'Security System': Shield,
+    '24/7 Security': Shield,
+    'Window View': Home
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-nb-bg flex items-center justify-center">
-        <div className="text-nb-ink font-body">Loading property details...</div>
-      </div>
-    );
+    return <ListingDetailsSkeleton />;
   }
 
   if (!property) {
@@ -266,7 +439,7 @@ export function ListingDetails() {
                 )}
                 <div className="flex items-center text-sm text-nb-ink/70">
                   <Star className="w-4 h-4 mr-1 fill-current text-nb-warn" />
-                  4.8 (24 reviews)
+                  {property.avgRating} ({property.totalReviews} reviews)
                 </div>
               </div>
             </div>
@@ -336,6 +509,7 @@ export function ListingDetails() {
                     Hosted by {property.landlord.slice(0, 6)}...{property.landlord.slice(-4)}
                   </h3>
                   <div className="flex items-center text-sm text-nb-ink/70">
+                    <Shield className="w-3 h-3 mr-1" />
                     <span>Verified host • Token ID: {property.tokenId}</span>
                   </div>
                 </div>
@@ -397,13 +571,13 @@ export function ListingDetails() {
                     <h3 className="font-display font-bold text-lg text-nb-ink mb-4">
                       What this place offers
                     </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {property.amenities.map((amenity) => {
                         const IconComponent = amenityIcons[amenity] || Home;
                         return (
-                          <div key={amenity} className="flex items-center space-x-3">
-                            <IconComponent className="w-5 h-5 text-nb-ink/60" />
-                            <span className="text-nb-ink">{amenity}</span>
+                          <div key={amenity} className="flex items-center space-x-3 p-3 border border-nb-ink/20 rounded-nb">
+                            <IconComponent className="w-5 h-5 text-nb-accent" />
+                            <span className="text-nb-ink font-medium">{amenity}</span>
                           </div>
                         );
                       })}
@@ -414,36 +588,46 @@ export function ListingDetails() {
                 {activeTab === 'terms' && (
                   <div>
                     <h3 className="font-display font-bold text-lg text-nb-ink mb-4">
-                      Rental Terms
+                      Rental Terms & Conditions
                     </h3>
                     <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-nb-ink">Monthly Rent</span>
-                        <span className="font-medium text-nb-ink">₹{property.rentPerMonth.toLocaleString()}</span>
+                      <div className="flex justify-between items-center py-3 border-b border-nb-ink/20">
+                        <span className="text-nb-ink font-medium">Monthly Rent</span>
+                        <span className="font-bold text-nb-ink">₹{property.rentPerMonth.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-nb-ink">Security Deposit</span>
-                        <span className="font-medium text-nb-ink">₹{property.securityDeposit.toLocaleString()}</span>
+                      <div className="flex justify-between items-center py-3 border-b border-nb-ink/20">
+                        <span className="text-nb-ink font-medium">Security Deposit</span>
+                        <span className="font-bold text-nb-ink">₹{property.securityDeposit.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-nb-ink">Dispute Fee</span>
-                        <span className="font-medium text-nb-ink">₹{property.disputeFee.toLocaleString()}</span>
+                      <div className="flex justify-between items-center py-3 border-b border-nb-ink/20">
+                        <span className="text-nb-ink font-medium">Dispute Fee</span>
+                        <span className="font-bold text-nb-ink">₹{property.disputeFee.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-nb-ink">Minimum Duration</span>
-                        <span className="font-medium text-nb-ink">{property.minDurationMonths} months</span>
+                      <div className="flex justify-between items-center py-3 border-b border-nb-ink/20">
+                        <span className="text-nb-ink font-medium">Minimum Duration</span>
+                        <span className="font-bold text-nb-ink">{property.minDurationMonths} months</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-nb-ink">Maximum Duration</span>
-                        <span className="font-medium text-nb-ink">{property.maxDurationMonths} months</span>
+                      <div className="flex justify-between items-center py-3 border-b border-nb-ink/20">
+                        <span className="text-nb-ink font-medium">Maximum Duration</span>
+                        <span className="font-bold text-nb-ink">{property.maxDurationMonths} months</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-nb-ink">Accepted Payment</span>
-                        <span className="font-medium text-nb-ink">BNB</span>
+                      <div className="flex justify-between items-center py-3 border-b border-nb-ink/20">
+                        <span className="text-nb-ink font-medium">Payment Method</span>
+                        <span className="font-bold text-nb-ink">Cryptocurrency (BNB)</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-nb-ink">Total to Pay</span>
-                        <span className="font-medium text-nb-ink">₹{(property.rentPerMonth + property.securityDeposit + property.disputeFee).toLocaleString()}</span>
+                      <div className="flex justify-between items-center py-3 bg-nb-accent/10 px-4 rounded-nb">
+                        <span className="text-nb-ink font-bold">Total Initial Payment</span>
+                        <span className="font-bold text-nb-ink text-lg">₹{(property.rentPerMonth + property.securityDeposit + property.disputeFee).toLocaleString()}</span>
+                      </div>
+                      
+                      <div className="mt-6 p-4 bg-nb-bg border border-nb-ink/20 rounded-nb">
+                        <h4 className="font-medium text-nb-ink mb-2">Important Notes:</h4>
+                        <ul className="text-sm text-nb-ink/70 space-y-1">
+                          <li>• Security deposit is fully refundable at the end of the lease</li>
+                          <li>• Dispute fee is held in smart contract escrow</li>
+                          <li>• All payments are secured by blockchain technology</li>
+                          <li>• Rental agreement is automatically enforced by smart contract</li>
+                        </ul>
                       </div>
                     </div>
                   </div>
@@ -451,25 +635,37 @@ export function ListingDetails() {
 
                 {activeTab === 'reviews' && (
                   <div>
-                    <h3 className="font-display font-bold text-lg text-nb-ink mb-4">
-                      Reviews (Demo)
-                    </h3>
-                    <div className="space-y-4">
-                      {[1, 2, 3].map((review) => (
-                        <div key={review} className="border-b border-nb-ink/20 pb-4 last:border-b-0">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <div className="w-8 h-8 bg-nb-accent rounded-full flex items-center justify-center">
-                              <span className="text-xs font-bold text-nb-ink">U</span>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="font-display font-bold text-lg text-nb-ink">
+                        Reviews ({property.totalReviews})
+                      </h3>
+                      <div className="flex items-center space-x-2">
+                        <Star className="w-5 h-5 fill-current text-nb-warn" />
+                        <span className="font-bold text-nb-ink">{property.avgRating}</span>
+                        <span className="text-nb-ink/70">({property.totalReviews} reviews)</span>
+                      </div>
+                    </div>
+                    <div className="space-y-6">
+                      {property.reviews.map((review, index) => (
+                        <div key={index} className="border-b border-nb-ink/20 pb-6 last:border-b-0">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <div className="w-10 h-10 bg-nb-accent rounded-full flex items-center justify-center border-2 border-nb-ink">
+                              <span className="text-sm font-bold text-nb-ink">{review.avatar}</span>
                             </div>
-                            <span className="font-medium text-nb-ink">Demo User {review}</span>
-                            <div className="flex">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star key={star} className="w-3 h-3 fill-current text-nb-warn" />
-                              ))}
+                            <div>
+                              <h4 className="font-medium text-nb-ink">{review.name}</h4>
+                              <div className="flex items-center space-x-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star 
+                                    key={star} 
+                                    className={`w-3 h-3 ${star <= review.rating ? 'fill-current text-nb-warn' : 'text-nb-ink/20'}`} 
+                                  />
+                                ))}
+                              </div>
                             </div>
                           </div>
-                          <p className="text-sm text-nb-ink/80">
-                            Great place to stay! Clean, well-maintained, and the landlord was very responsive.
+                          <p className="text-nb-ink/80 leading-relaxed">
+                            {review.text}
                           </p>
                         </div>
                       ))}

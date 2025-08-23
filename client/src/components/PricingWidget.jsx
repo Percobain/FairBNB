@@ -126,7 +126,7 @@ export function PricingWidget({
           <div className="bg-nb-accent/20 border-2 border-nb-accent rounded-nb p-3">
             <div className="flex items-center text-sm text-nb-ink">
               <span className="font-medium">Payment:</span>
-              <span className="ml-1">BNB (Demo)</span>
+              <span className="ml-1">BNB</span>
             </div>
             <div className="text-xs text-nb-ink/70 mt-1">
               Funds will be held in escrow until rental completion
@@ -140,12 +140,9 @@ export function PricingWidget({
             size="lg"
             data-testid="book-listing"
           >
-            Book Now (Demo)
+            Book Now
           </NBButton>
 
-          <div className="text-xs text-nb-ink/60 text-center">
-            This is a demo. No real transactions will be processed.
-          </div>
         </div>
       </NBCard>
 
@@ -172,12 +169,6 @@ export function PricingWidget({
                 </div>
               </div>
               
-              <div className="bg-nb-warn/20 border-2 border-nb-warn rounded-nb p-3">
-                <div className="text-sm text-nb-ink">
-                  <strong>Demo Mode:</strong> No real funds will be locked. 
-                  This will create a mock rental for demonstration purposes.
-                </div>
-              </div>
               
               <div className="flex gap-3">
                 <NBButton
